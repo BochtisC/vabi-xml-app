@@ -219,5 +219,3 @@ if uploaded_files and len(uploaded_files) >= 2:
 
 else:
     st.info("Ανέβασε δύο αρχεία με το ίδιο όνομα (XML & Excel) μαζί, με drag & drop.")
-
-
