@@ -13,6 +13,7 @@ import streamlit as st
 import requests
 import openpyxl
 import re
+import json
 
 st.markdown("""
     <style>
@@ -23,18 +24,14 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-API_TOKEN = "pk_82763580_PX00W04XWNJPJ2YR4M6NCNZ8WQPOLY6O"
-LIST_ID = "901511575020"
+# ΔΙΑΒΑΣΕ ΑΠΟ SECRETS
+API_TOKEN = st.secrets["CLICKUP_API_TOKEN"]
+LIST_ID = st.secrets["CLICKUP_LIST_ID"]
 HEADERS = {"Authorization": API_TOKEN}
 
-CLICKUP_FIELDS = [
-    ("A1c Straat", "Straat"),
-    ("A1c Huisnummer", "Huisnummer"),
-    ("A1c huisnummer toev.", "Huisnummertoevoeging"),
-    ("A1c Postcode", "Postcode"),
-    ("A1c Plaats", "Plaats"),
-    ("A1c Adres", "NaamObject"),
-]
+# ΔΙΑΒΑΣΕ ΤΟ MAPPING ΑΠΟ ΤΟ JSON
+with open("fields_mapping.json", "r", encoding="utf-8") as f:
+    CLICKUP_FIELDS = json.load(f)
 
 def get_tasks(list_id):
     url = f"https://api.clickup.com/api/v2/list/{list_id}/task?archived=false"
@@ -95,12 +92,12 @@ def safe_patch_object_classificatie(xml_text, gebouwhoogte):
 def safe_patch_object_naamobject(xml_text, naamobject):
     pattern = r"(<NaamObject>)(.*?)(</NaamObject>)"
     if re.search(pattern, xml_text, flags=re.DOTALL):
-        new_text = re.sub(pattern, r"\1{}\3".format(naamobject), xml_text, count=1, flags=re.DOTALL)
+        new_text = re.sub(pattern, lambda m: f"{m.group(1)}{naamobject}{m.group(3)}", xml_text, count=1, flags=re.DOTALL)
     else:
         if "<ObjectObject>" in xml_text:
             new_text = xml_text.replace(
                 "<ObjectObject>",
-                "<ObjectObject><NaamObject>{}</NaamObject>".format(naamobject),
+                f"<ObjectObject><NaamObject>{naamobject}</NaamObject>",
                 1
             )
         else:
@@ -184,7 +181,11 @@ if uploaded_files and len(uploaded_files) >= 2:
             st.markdown("### Συμπλήρωση στο XML από ClickUp")
 
         updated_fields = {}
-        for ck_field, xml_label in CLICKUP_FIELDS:
+        for field in CLICKUP_FIELDS:
+            if field["source"] != "clickup":
+                continue  # αγνόησε ό,τι δεν είναι clickup
+            ck_field = field["field"]
+            xml_label = field["ui_label"]
             value = fields.get(ck_field, "")
             if edit_mode:
                 updated_value = st.text_input(f"{xml_label}", value=value, key=f"edit_{ck_field}")
@@ -195,7 +196,7 @@ if uploaded_files and len(uploaded_files) >= 2:
             updated_fields[ck_field] = updated_value.strip() if updated_value else ""
 
         naamobject = updated_fields.get("A1c Adres", "")
-        missing_fields = [label for ck, label in CLICKUP_FIELDS if not updated_fields.get(ck)]
+        missing_fields = [field["ui_label"] for field in CLICKUP_FIELDS if field["source"] == "clickup" and not updated_fields.get(field["field"])]
 
         if missing_fields:
             st.warning("Λείπουν πεδία: " + ", ".join(missing_fields) +
