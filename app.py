@@ -187,7 +187,6 @@ if uploaded_files and len(uploaded_files) >= 2:
                 new_xml = safe_patch_object_adresgegevens(xml_text, updated_fields)
                 new_xml = safe_patch_object_classificatie(new_xml, gebouwhoogte)
                 new_xml = safe_patch_object_naamobject(new_xml, naamobject)
-                xml_status.success("Το XML είναι έτοιμο για κατέβασμα")
                 st.download_button(
                     label="Κατέβασε το νέο XML",
                     data=new_xml,
