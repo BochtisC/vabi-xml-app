@@ -109,7 +109,7 @@ if uploaded_files and len(uploaded_files) >= 2:
     common_names = set(xml_files) & set(excel_files)
 
     if not common_names:
-        st.error("Δε βρέθηκε ζευγάρι XML/Excel με ίδιο όνομα (χωρίς κατάληξη)!")
+        st.error("Δε βρέθηκε XML & Excel με ίδιο όνομα!")
     else:
         selected = list(common_names)[0]
         xml_file = xml_files[selected]
