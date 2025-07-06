@@ -189,6 +189,7 @@ if uploaded_files and len(uploaded_files) >= 2:
 
         # Προειδοποίηση αλλά ΠΑΝΤΑ ορατό το κουμπί download
         if missing_fields:
+            xml_status.info("Ενημέρωση XML με τα στοιχεία...")
             st.warning("Λείπουν πεδία: " + ", ".join(missing_fields))
         else:
             xml_status.empty()
@@ -197,6 +198,7 @@ if uploaded_files and len(uploaded_files) >= 2:
             new_xml = safe_patch_object_adresgegevens(xml_text, updated_fields)
             new_xml = safe_patch_object_classificatie(new_xml, gebouwhoogte)
             new_xml = safe_patch_object_naamobject(new_xml, naamobject)
+            xml_status.success("Το XML είναι έτοιμο για κατέβασμα")
             default_filename = f"{selected}_updated.xml"
             st.download_button(
                     label="Κατέβασε το νέο XML",
@@ -209,3 +211,4 @@ if uploaded_files and len(uploaded_files) >= 2:
 
 else:
     st.info("Ανέβασε δύο αρχεία με το ίδιο όνομα (XML & Excel) μαζί, με drag & drop.")
+
