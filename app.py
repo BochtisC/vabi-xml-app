@@ -25,8 +25,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ΔΙΑΒΑΣΕ ΑΠΟ SECRETS
-API_TOKEN = st.secrets["CLICKUP_API_TOKEN"]
-LIST_ID = st.secrets["CLICKUP_LIST_ID"]
+API_TOKEN = "pk_82763580_PX00W04XWNJPJ2YR4M6NCNZ8WQPOLY6O"
+LIST_ID = "901511575020"
 HEADERS = {"Authorization": API_TOKEN}
 
 # ΔΙΑΒΑΣΕ ΤΟ MAPPING ΑΠΟ ΤΟ JSON
