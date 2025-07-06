@@ -3,7 +3,16 @@ import requests
 import openpyxl
 import re
 
-# ---- ClickUp Settings ----
+# Προσθέτεις το CSS για να είναι μπλε το κουμπί λήψης
+st.markdown("""
+    <style>
+    .stDownloadButton button {
+        background-color: #0066cc !important;
+        color: white !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 API_TOKEN = "pk_82763580_PX00W04XWNJPJ2YR4M6NCNZ8WQPOLY6O"
 LIST_ID = "901511575020"
 HEADERS = {"Authorization": API_TOKEN}
@@ -14,7 +23,7 @@ CLICKUP_FIELDS = [
     ("A1c huisnummer toev.", "Huisnummertoevoeging"),
     ("A1c Postcode", "Postcode"),
     ("A1c Plaats", "Plaats"),
-    ("A1c Adres", "NaamObject"),  # Αυτό είναι για το <NaamObject>
+    ("A1c Adres", "NaamObject"),
 ]
 
 def get_tasks(list_id):
@@ -80,8 +89,7 @@ def safe_patch_object_naamobject(xml_text, naamobject):
         st.error("Δεν βρέθηκε το tag <NaamObject> στο XML!")
     return new_text
 
-# --- UI ---
-st.title("Vabi XML ")
+st.title("Vabi XML")
 
 uploaded_files = st.file_uploader(
     "Ανέβασε τα δύο αρχεία (XML + Excel με ίδιο όνομα, drag & drop μαζί)",
@@ -90,7 +98,6 @@ uploaded_files = st.file_uploader(
 )
 
 if uploaded_files and len(uploaded_files) >= 2:
-    # Ταξινόμηση αρχείων
     files_by_type = {}
     for f in uploaded_files:
         ext = f.name.rsplit('.', 1)[-1].lower()
@@ -105,69 +112,91 @@ if uploaded_files and len(uploaded_files) >= 2:
         st.error("Δε βρέθηκε ζευγάρι XML/Excel με ίδιο όνομα (χωρίς κατάληξη)!")
     else:
         selected = list(common_names)[0]
-        st.info(f"Βρέθηκε ζευγάρι: {selected}.xml & {selected}.xlsx/xls")
         xml_file = xml_files[selected]
         excel_file = excel_files[selected]
-
         xml_text = xml_file.read().decode("utf-8")
 
-        # --- Excel: Gebouwhoogte ---
+        # ---- Ενημέρωση από Excel ----
+        excel_status = st.empty()
+        excel_status.info(f"Ενημέρωση XML από Excel ({selected})...")
+        gebouwhoogte = None
         try:
             excel_file.seek(0)
             wb = openpyxl.load_workbook(excel_file, data_only=True)
             if "Algemeen" not in wb.sheetnames:
-                st.error("Το Excel δεν περιέχει φύλλο με όνομα 'Algemeen'!")
+                excel_status.error("❌ Το Excel δεν περιέχει φύλλο με όνομα 'Algemeen'!")
                 st.stop()
             ws = wb["Algemeen"]
             gebouwhoogte = ws["N6"].value
         except Exception as e:
-            st.error(f"Σφάλμα κατά το διάβασμα του Excel: {e}")
+            excel_status.error(f"❌ Σφάλμα κατά το διάβασμα του Excel: {e}")
             st.stop()
 
         if gebouwhoogte is None or str(gebouwhoogte).strip() == "":
-            st.error("Το κελί N6 του φύλλου 'Algemeen' είναι κενό!")
+            excel_status.error("❌ Το κελί N6 του φύλλου 'Algemeen' είναι κενό!")
             st.stop()
-        st.markdown(f"Τιμή Gebouwhoogte από Excel (Algemeen!N6): **{gebouwhoogte}**")
+        excel_status.success("Ενημέρωση XML από Excel")
+        st.markdown(f"✅ Τιμή Gebouwhoogte από Excel (Algemeen!N6): <b>{gebouwhoogte}</b>", unsafe_allow_html=True)
 
-        # --- ClickUp ---
-        st.info(f"Ψάχνω στο ClickUp για task με όνομα: **{selected}**")
+        # ---- Ενημέρωση από ClickUp ----
+        clickup_status = st.empty()
+        clickup_status.info(f"Ψάχνω στο ClickUp για task με όνομα: {selected}")
         tasks = get_tasks(LIST_ID)
         if not tasks:
-            st.error("Δε βρέθηκαν tasks στο ClickUp ή αποτυχία σύνδεσης.")
+            clickup_status.error("❌ Δε βρέθηκαν tasks στο ClickUp ή αποτυχία σύνδεσης.")
             st.stop()
         task = find_task_by_name(tasks, selected)
         if not task:
-            st.error(f"Δε βρέθηκε task στο ClickUp με όνομα '{selected}'.")
+            clickup_status.error(f"❌ Δε βρέθηκε task στο ClickUp με όνομα '{selected}'.")
             st.stop()
         fields = extract_custom_fields(task)
+        clickup_status.success(f"Βρέθηκε task στο ClickUp: {selected}")
 
-        st.markdown("### Συμπλήρωση στο XML από Clickup")
+        # ---- Ενημέρωση πεδίων XML ----
+        xml_status = st.empty()
+
+        col1, col2 = st.columns([8,1])
+        with col2:
+            edit_mode = st.toggle("✏️", key="edit_fields")
+        with col1:
+            st.markdown("### Συμπλήρωση στο XML από ClickUp")
+
+        updated_fields = {}
         for ck_field, xml_label in CLICKUP_FIELDS:
             value = fields.get(ck_field, "")
-            icon = "✅" if value else "❌"
-            st.markdown(f"{icon} <b>{xml_label}</b>: <span style='color:#222'>{value}</span>", unsafe_allow_html=True)
+            if edit_mode:
+                updated_value = st.text_input(f"{xml_label}", value=value, key=f"edit_{ck_field}")
+            else:
+                icon = "✅" if value else "❌"
+                st.markdown(f"{icon} <b>{xml_label}</b>: <span style='color:#222'>{value}</span>", unsafe_allow_html=True)
+                updated_value = value
+            updated_fields[ck_field] = updated_value.strip() if updated_value else ""
 
-        naamobject = fields.get("A1c Adres", "")
+        naamobject = updated_fields.get("A1c Adres", "")
+        missing_fields = [label for ck, label in CLICKUP_FIELDS if not updated_fields.get(ck)]
+        allow_download = (not edit_mode and not missing_fields) or (edit_mode and st.button("Ενημέρωση και Κατέβασμα XML"))
 
-        if st.button("Ενημέρωση και Κατέβασμα XML"):
+        if missing_fields and not edit_mode:
+            xml_status.info("Ενημέρωση XML με τα στοιχεία...")
+            st.warning("Λείπουν πεδία: " + ", ".join(missing_fields))
+        else:
+            xml_status.empty()
+
+        if allow_download:
             try:
-                # Πρώτα ενημερώνεις ObjectAdresgegevens
-                new_xml = safe_patch_object_adresgegevens(xml_text, fields)
-                # Μετά ObjectClassificatie (Excel)
+                new_xml = safe_patch_object_adresgegevens(xml_text, updated_fields)
                 new_xml = safe_patch_object_classificatie(new_xml, gebouwhoogte)
-                # Τέλος, NaamObject (ClickUp)
                 new_xml = safe_patch_object_naamobject(new_xml, naamobject)
-                st.success("Το XML ενημερώθηκε στα τρία σημεία!")
+                xml_status.success("Το XML είναι έτοιμο για κατέβασμα")
                 st.download_button(
                     label="Κατέβασε το νέο XML",
                     data=new_xml,
-                    file_name=f"{selected}_updated.xml",
+                    file_name=f"{selected}!.xml",
                     mime="application/xml"
                 )
-                with st.expander("Δες το νέο XML"):
-                    st.code(new_xml, language="xml")
+                # ΔΕΝ υπάρχει expander για το νέο XML εδώ
             except Exception as e:
-                st.error(f"Σφάλμα: {e}")
+                xml_status.error(f"Σφάλμα: {e}")
 
 else:
     st.info("Ανέβασε δύο αρχεία με το ίδιο όνομα (XML & Excel) μαζί, με drag & drop.")
