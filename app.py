@@ -88,7 +88,7 @@ def patch_or_insert_tag(xml_text, mapping, values):
             new_xml = tag_pattern.sub(rf'\1{value}\3', new_xml)
     return new_xml
 
-st.title("XML Update")
+st.title("Vabi XML (χωρίς αλλαγή μορφής στο XML)")
 
 uploaded_files = st.file_uploader(
     "Ανέβασε τα δύο αρχεία (XML + Excel με ίδιο όνομα, drag & drop μαζί)",
