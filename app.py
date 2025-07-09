@@ -1,34 +1,38 @@
-
 import streamlit as st
-from st_oauth import OAuth2Component
+import streamlit_authenticator as stauth
 import requests
 import openpyxl
 import json
 import re
 
-# --------- AUTHENTICATION ---------
-client_id = "Ov23liJnmsGIozcWOOng"
-client_secret = "2199653c15daca1107ef5f6d612093e60ed35bbd"
-authorize_url = "https://github.com/login/oauth/authorize"
-token_url = "https://github.com/login/oauth/access_token"
-redirect_uri = "https://vabi-xml-app-hjfjosb7t2cxtwij4yuqbx.streamlit.app"
+# ----- LOGIN SETUP -----
+# Μπορείς να αλλάξεις τα ονόματα, emails και τα hashed passwords
 
-oauth2 = OAuth2Component(
-    client_id,
-    client_secret,
-    authorize_url,
-    token_url,
-    redirect_uri,
-    scopes="user:email"
+names = ['Χρήστος', 'Δημήτρης']
+usernames = ['christos@email.com', 'dimitris@email.com']
+# Πρώτα φτιάχνεις hashes για τα passwords σου (δες πιο κάτω)
+hashed_passwords = [
+    '$2b$12$2txxtWw8smMumw6J8R0v1.yPL3TS1k4tC6TOkAlq9UJJcCCJhB8rG',  # password: 1234
+    '$2b$12$MRKfjsYOdcvyyD7s6vZubecf5k6bHeoAM9B79vBC.4Pa8ljAvKLCa'   # password: mypassword
+]
+
+authenticator = stauth.Authenticate(
+    names, usernames, hashed_passwords,
+    'cookie_name', 'signature_key', cookie_expiry_days=1
 )
 
-st.title("XML Update (Login με GitHub απαραίτητο)")
+name, authentication_status, username = authenticator.login('Σύνδεση', 'main')
 
-result = oauth2.authorize_button("Σύνδεση με GitHub")
-
-if not (result and "token" in result):
-    st.info("Παρακαλώ συνδεθείτε με GitHub για να συνεχίσετε.")
+if authentication_status is None:
+    st.warning('Συμπλήρωσε email και κωδικό για να μπεις.')
     st.stop()
+elif authentication_status is False:
+    st.error('Λάθος email ή κωδικός.')
+    st.stop()
+elif authentication_status:
+    st.success(f'Καλωσήρθες {name}!')
+
+# ======= ΤΟ ΚΥΡΙΩΣ APP ΞΕΚΙΝΑ ΑΠΟ ΕΔΩ ===========
 
 st.markdown("""
     <style>
