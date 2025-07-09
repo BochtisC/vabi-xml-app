@@ -1,9 +1,34 @@
+
 import streamlit as st
+from st_oauth import OAuth2Component
 import requests
 import openpyxl
 import json
 import re
 
+# --------- AUTHENTICATION ---------
+client_id = "Ov23liJnmsGIozcWOOng"
+client_secret = "2199653c15daca1107ef5f6d612093e60ed35bbd"
+authorize_url = "https://github.com/login/oauth/authorize"
+token_url = "https://github.com/login/oauth/access_token"
+redirect_uri = "https://vabi-xml-app-hjfjosb7t2cxtwij4yuqbx.streamlit.app"
+
+oauth2 = OAuth2Component(
+    client_id,
+    client_secret,
+    authorize_url,
+    token_url,
+    redirect_uri,
+    scopes="user:email"
+)
+
+st.title("XML Update (Login με GitHub απαραίτητο)")
+
+result = oauth2.authorize_button("Σύνδεση με GitHub")
+
+if not (result and "token" in result):
+    st.info("Παρακαλώ συνδεθείτε με GitHub για να συνεχίσετε.")
+    st.stop()
 
 st.markdown("""
     <style>
