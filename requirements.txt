@@ -1,4 +1,4 @@
 streamlit
 requests
 openpyxl
-streamlit-authenticator
+streamlit-authenticator==0.2.2
