@@ -41,7 +41,7 @@ elif authentication_status is False:
     st.error('Λάθος email ή κωδικός.')
     st.stop()
 elif authentication_status:
-    st.success(f'Καλωσήρθες {name}!")
+    st.success(f'Καλωσήρθες {name}!)
     # Εδώ συνεχίζεις με το υπόλοιπο app σου
 
 
