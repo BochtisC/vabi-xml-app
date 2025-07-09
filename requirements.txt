@@ -1,3 +1,4 @@
 streamlit
 requests
 openpyxl
+git+https://github.com/ai-yash/st-oauth
