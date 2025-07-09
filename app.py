@@ -88,7 +88,7 @@ def patch_or_insert_tag(xml_text, mapping, values):
             new_xml = tag_pattern.sub(rf'\1{value}\3', new_xml)
     return new_xml
 
-st.title("Vabi XML (χωρίς αλλαγή μορφής στο XML)")
+st.title("XML Update")
 
 uploaded_files = st.file_uploader(
     "Ανέβασε τα δύο αρχεία (XML + Excel με ίδιο όνομα, drag & drop μαζί)",
@@ -175,7 +175,7 @@ if uploaded_files and len(uploaded_files) >= 2:
         with col2:
             edit_mode = st.toggle("✏️", key="edit_fields")
         with col1:
-            st.markdown("### Συμπλήρωση στο XML από ClickUp & Excel & Custom πεδία (με fixed value)")
+            st.markdown("### Συμπλήρωση στο XML από ClickUp & Excel")
 
         updated_fields = {}
 
