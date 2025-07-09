@@ -38,7 +38,7 @@
     {
         "source": "clickup",
         "field": "A1c Naam Opject",
-        "ui_label": "NaamObject",
+        "ui_label": "Naam Object",
         "xml_path": "./Objecten/Object/ObjectAlgemeen/ObjectObject/NaamObject"
     },
     {
