@@ -5,27 +5,15 @@ import openpyxl
 import json
 import re
 
-# Hashes για τα passwords σου
+names = ['Chris', 'Steve']
+usernames = ['bochtisc@gmail.com', 'm-oconsultancy@outlook.com']
 hashed_passwords = [
-    '$2b$12$2txxtWw8smMumw6J8R0v1.yPL3TS1k4tC6TOkAlq9UJJcCCJhB8rG',   # 123456789
-    '$2b$12$MRKfjsYOdcvyyD7s6vZubecf5k6bHeoAM9B79vBC.4Pa8ljAvKLCa'    # 12345678910
+    '$2b$12$2txxtWw8smMumw6J8R0v1.yPL3TS1k4tC6TOkAlq9UJJcCCJhB8rG',   # password: 123456789
+    '$2b$12$MRKfjsYOdcvyyD7s6vZubecf5k6bHeoAM9B79vBC.4Pa8ljAvKLCa'    # password: 12345678910
 ]
 
-credentials = {
-    "usernames": {
-        "bochtisc@gmail.com": {
-            "name": "Chris",
-            "password": "$2b$12$2txxtWw8smMumw6J8R0v1.yPL3TS1k4tC6TOkAlq9UJJcCCJhB8rG"
-        },
-        "m-oconsultancy@outlook.com": {
-            "name": "Steve",
-            "password": "$2b$12$MRKfjsYOdcvyyD7s6vZubecf5k6bHeoAM9B79vBC.4Pa8ljAvKLCa"
-        }
-    }
-}
-
 authenticator = stauth.Authenticate(
-    credentials,
+    names, usernames, hashed_passwords,
     'cookie_name', 'signature_key', cookie_expiry_days=1
 )
 
@@ -39,7 +27,6 @@ elif authentication_status is False:
     st.stop()
 elif authentication_status:
     st.success(f'Καλωσήρθες {name}!')
-    # Εδώ συνεχίζεις με το υπόλοιπο app σου
 
 
 # ======= ΤΟ ΚΥΡΙΩΣ APP ΞΕΚΙΝΑ ΑΠΟ ΕΔΩ ===========
