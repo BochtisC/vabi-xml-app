@@ -1,19 +1,9 @@
-# -----------------------------------------------------------------------------
-# Mijn EnergieLabel Converter
-# Copyright (c) Bochtis Christos. All rights reserved.
-#
-# This software is proprietary and confidential.
-# Unauthorized copying, modification or distribution of this
-# file, via any medium is strictly prohibited.
-#
-# Use of this software is subject to a valid license granted by the author.
-# For licensing information, contact: bochtisc@gmail.com
-# -----------------------------------------------------------------------------
 import streamlit as st
 import requests
 import openpyxl
-import re
 import json
+import re
+
 
 st.markdown("""
     <style>
@@ -24,12 +14,10 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# ΔΙΑΒΑΣΕ ΑΠΟ SECRETS
 API_TOKEN = "pk_82763580_PX00W04XWNJPJ2YR4M6NCNZ8WQPOLY6O"
 LIST_ID = "901511575020"
 HEADERS = {"Authorization": API_TOKEN}
 
-# ΔΙΑΒΑΣΕ ΤΟ MAPPING ΑΠΟ ΤΟ JSON
 with open("fields_mapping.json", "r", encoding="utf-8") as f:
     CLICKUP_FIELDS = json.load(f)
 
@@ -56,55 +44,51 @@ def extract_custom_fields(task):
             out[name] = str(value)
     return out
 
-def safe_patch_object_adresgegevens(xml_text, fields):
-    new_adres = (
-        "<ObjectAdresgegevens>"
-        f"<Straat>{fields.get('A1c Straat', '')}</Straat>"
-        f"<Huisnummer>{fields.get('A1c Huisnummer', '')}</Huisnummer>"
-        f"<Huisletter>{fields.get('A1c Huisletter', '')}</Huisletter>"
-        f"<Huisnummertoevoeging>{fields.get('A1c huisnummer toev.', '')}</Huisnummertoevoeging>"
-        f"<Postcode>{fields.get('A1c Postcode', '')}</Postcode>"
-        f"<Woonplaats>{fields.get('A1c Plaats', '')}</Woonplaats>"
-        f"<BagId></BagId>"
-        "</ObjectAdresgegevens>"
-    )
-    old_tag = "<ObjectAdresgegevens></ObjectAdresgegevens>"
-    if old_tag not in xml_text:
-        st.error(f"Δεν βρέθηκε το tag {old_tag} στο XML!")
-        return xml_text
-    return xml_text.replace(old_tag, new_adres, 1)
+def clean_excel_value(value):
+    if value is None:
+        return ""
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, str):
+        parts = value.strip().split()
+        num = parts[0].replace(",", ".")
+        return num
+    return str(value)
 
-def safe_patch_object_classificatie(xml_text, gebouwhoogte):
-    old_tag = "<ObjectClassificatie></ObjectClassificatie>"
-    new_tag = (
-        "<ObjectClassificatie>"
-        f"<Gebouwhoogte>{gebouwhoogte}</Gebouwhoogte>"
-        "</ObjectClassificatie>"
-    )
-    if old_tag in xml_text:
-        return xml_text.replace(old_tag, new_tag, 1)
-    else:
-        if "</EPA>" in xml_text:
-            return xml_text.replace("</EPA>", new_tag + "\n</EPA>")
-        else:
-            return xml_text + "\n" + new_tag
-
-def safe_patch_object_naamobject(xml_text, naamobject):
-    pattern = r"(<NaamObject>)(.*?)(</NaamObject>)"
-    if re.search(pattern, xml_text, flags=re.DOTALL):
-        new_text = re.sub(pattern, lambda m: f"{m.group(1)}{naamobject}{m.group(3)}", xml_text, count=1, flags=re.DOTALL)
-    else:
-        if "<ObjectObject>" in xml_text:
-            new_text = xml_text.replace(
-                "<ObjectObject>",
-                f"<ObjectObject><NaamObject>{naamobject}</NaamObject>",
-                1
+def patch_or_insert_tag(xml_text, mapping, values):
+    new_xml = xml_text
+    for field in mapping:
+        if field.get("source") not in ("clickup", "excel", "custom"):
+            continue
+        value = values.get(field["field"], "")
+        xml_path = field.get("xml_path")
+        if not xml_path or '/' not in xml_path:
+            continue
+        path_parts = xml_path.strip('./').split('/')
+        tag = path_parts[-1]
+        parent_tag = path_parts[-2] if len(path_parts) > 1 else None
+        if parent_tag:
+            parent_pattern = re.compile(
+                f'(<{parent_tag}.*?>)(.*?)(</{parent_tag}>)',
+                re.DOTALL | re.IGNORECASE
             )
+            def replace_in_parent(m):
+                content = m.group(2)
+                tag_pattern = re.compile(f'(<{tag}>)(.*?)(</{tag}>)', re.DOTALL)
+                if tag_pattern.search(content):
+                    new_content = tag_pattern.sub(rf'\1{value}\3', content)
+                    return m.group(1) + new_content + m.group(3)
+                else:
+                    insert_text = f'<{tag}>{value}</{tag}>'
+                    new_content = content + insert_text
+                    return m.group(1) + new_content + m.group(3)
+            new_xml = parent_pattern.sub(replace_in_parent, new_xml)
         else:
-            new_text = xml_text + f"\n<NaamObject>{naamobject}</NaamObject>"
-    return new_text
+            tag_pattern = re.compile(f'(<{tag}>)(.*?)(</{tag}>)', re.DOTALL)
+            new_xml = tag_pattern.sub(rf'\1{value}\3', new_xml)
+    return new_xml
 
-st.title("Vabi XML")
+st.title("XML Update")
 
 uploaded_files = st.file_uploader(
     "Ανέβασε τα δύο αρχεία (XML + Excel με ίδιο όνομα, drag & drop μαζί)",
@@ -135,10 +119,14 @@ if uploaded_files and len(uploaded_files) >= 2:
             st.error(f"Σφάλμα στο διάβασμα του XML: {e}")
             st.stop()
 
-        # ---- Ενημέρωση από Excel ----
+        # Αυτόματη προσθήκη <Verdieping> αν λείπει
+        if "<Verdiepingen>" in xml_text and "<Verdieping>" not in xml_text:
+            xml_text = xml_text.replace("<Verdiepingen>", "<Verdiepingen><Verdieping></Verdieping>")
+
+        # Ενημέρωση από Excel
         excel_status = st.empty()
         excel_status.info(f"Ενημέρωση XML από Excel ({selected})...")
-        gebouwhoogte = None
+        excel_values = {}
         try:
             excel_file.seek(0)
             wb = openpyxl.load_workbook(excel_file, data_only=True)
@@ -146,18 +134,29 @@ if uploaded_files and len(uploaded_files) >= 2:
                 excel_status.error("❌ Το Excel δεν περιέχει φύλλο με όνομα 'Algemeen'!")
                 st.stop()
             ws = wb["Algemeen"]
-            gebouwhoogte = ws["N6"].value
+            for field in CLICKUP_FIELDS:
+                if field.get("source") == "excel":
+                    cell = field.get("cell", "").replace(" ", "")
+                    value = ws[cell].value if cell else ""
+                    if field["field"] == "Gebruiksoppervlakte" and (value is None or value == ""):
+                        value = "0"
+                    excel_values[field["field"]] = clean_excel_value(value)
         except Exception as e:
             excel_status.error(f"❌ Σφάλμα κατά το διάβασμα του Excel: {e}")
             st.stop()
 
-        if gebouwhoogte is None or str(gebouwhoogte).strip() == "":
-            excel_status.error("❌ Το κελί N6 του φύλλου 'Algemeen' είναι κενό!")
-            st.stop()
-        excel_status.success("Ενημέρωση XML από Excel")
-        st.markdown(f"✅ Τιμή Gebouwhoogte από Excel (Algemeen!N6): <b>{gebouwhoogte}</b>", unsafe_allow_html=True)
+        missing_excels = [f["ui_label"] for f in CLICKUP_FIELDS if f.get("source") == "excel" and not excel_values.get(f["field"])]
+        if missing_excels:
+            excel_status.warning("Κενά πεδία Excel: " + ", ".join(missing_excels))
+        else:
+            excel_status.success("Ενημέρωση XML από Excel")
 
-        # ---- Ενημέρωση από ClickUp ----
+        for field in CLICKUP_FIELDS:
+            if field.get("source") == "excel":
+                val = excel_values.get(field["field"], "")
+                st.markdown(f"✅ Τιμή {field['ui_label']} από Excel ({field.get('cell','')}): <b>{val}</b>", unsafe_allow_html=True)
+
+        # ClickUp data
         clickup_status = st.empty()
         clickup_status.info(f"Ψάχνω στο ClickUp για task με όνομα: {selected}")
         tasks = get_tasks(LIST_ID)
@@ -171,44 +170,53 @@ if uploaded_files and len(uploaded_files) >= 2:
         fields = extract_custom_fields(task)
         clickup_status.success(f"Βρέθηκε task στο ClickUp: {selected}")
 
-        # ---- Ενημέρωση πεδίων XML ----
         xml_status = st.empty()
-
         col1, col2 = st.columns([8, 1])
         with col2:
             edit_mode = st.toggle("✏️", key="edit_fields")
         with col1:
-            st.markdown("### Συμπλήρωση στο XML από ClickUp")
+            st.markdown("### Συμπλήρωση στο XML από ClickUp & Excel & Custom πεδία (με fixed value)")
 
         updated_fields = {}
+
+        # ClickUp πεδία
         for field in CLICKUP_FIELDS:
-            if field["source"] != "clickup":
-                continue  # αγνόησε ό,τι δεν είναι clickup
-            ck_field = field["field"]
-            xml_label = field["ui_label"]
-            value = fields.get(ck_field, "")
-            if edit_mode:
-                updated_value = st.text_input(f"{xml_label}", value=value, key=f"edit_{ck_field}")
-            else:
-                icon = "✅" if value else "❌"
-                st.markdown(f"{icon} <b>{xml_label}</b>: <span style='color:#222'>{value}</span>", unsafe_allow_html=True)
-                updated_value = value
-            updated_fields[ck_field] = updated_value.strip() if updated_value else ""
+            if field.get("source") == "clickup":
+                ck_field = field["field"]
+                xml_label = field["ui_label"]
+                value = fields.get(ck_field, "")
+                if edit_mode:
+                    updated_value = st.text_input(f"{xml_label}", value=value, key=f"edit_{ck_field}")
+                else:
+                    icon = "✅" if value else "❌"
+                    st.markdown(f"{icon} <b>{xml_label}</b>: <span style='color:#222'>{value}</span>", unsafe_allow_html=True)
+                    updated_value = value
+                updated_fields[ck_field] = updated_value.strip() if updated_value else ""
 
-        naamobject = updated_fields.get("A1c Adres", "")
-        missing_fields = [field["ui_label"] for field in CLICKUP_FIELDS if field["source"] == "clickup" and not updated_fields.get(field["field"])]
+        # Excel πεδία
+        for field in CLICKUP_FIELDS:
+            if field.get("source") == "excel":
+                updated_fields[field["field"]] = excel_values.get(field["field"], "")
 
+        # Custom/fixed value πεδία από το mapping (αν υπάρχει fixed_value)
+        for field in CLICKUP_FIELDS:
+            if "fixed_value" in field:
+                updated_fields[field["field"]] = field["fixed_value"]
+
+        missing_fields = [
+            field["ui_label"]
+            for field in CLICKUP_FIELDS
+            if field.get("source") in ("clickup", "excel", "custom") and not updated_fields.get(field["field"])
+        ]
         if missing_fields:
             st.warning("Λείπουν πεδία: " + ", ".join(missing_fields) +
                        " — Τα αντίστοιχα πεδία στο XML θα μείνουν κενά.")
         else:
             xml_status.empty()
 
-        # Ενημερώνει ΠΑΝΤΑ το XML, χωρίς προεπισκόπηση και success
+        # ΕΦΑΡΜΟΓΗ PATCH στο XML
         try:
-            new_xml = safe_patch_object_adresgegevens(xml_text, updated_fields)
-            new_xml = safe_patch_object_classificatie(new_xml, gebouwhoogte)
-            new_xml = safe_patch_object_naamobject(new_xml, naamobject)
+            new_xml = patch_or_insert_tag(xml_text, CLICKUP_FIELDS, updated_fields)
             st.download_button(
                 label="Κατέβασε το νέο XML",
                 data=new_xml,
