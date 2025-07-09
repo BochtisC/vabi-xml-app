@@ -5,18 +5,30 @@ import openpyxl
 import json
 import re
 
-# ----- LOGIN SETUP -----
-# Μπορείς να αλλάξεις τα ονόματα, emails και τα hashed passwords
+import streamlit as st
+import streamlit_authenticator as stauth
 
-names = ['Chris', 'Steve']
-usernames = ['bochtisc@gmail.com', 'm-oconsultancy@outlook.com']
+# Hashes για τα passwords σου
 hashed_passwords = [
-    '$2b$12$2txxtWw8smMumw6J8R0v1.yPL3TS1k4tC6TOkAlq9UJJcCCJhB8rG',   # password: 123456789
-    '$2b$12$MRKfjsYOdcvyyD7s6vZubecf5k6bHeoAM9B79vBC.4Pa8ljAvKLCa'    # password: 12345678910
+    '$2b$12$2txxtWw8smMumw6J8R0v1.yPL3TS1k4tC6TOkAlq9UJJcCCJhB8rG',   # 123456789
+    '$2b$12$MRKfjsYOdcvyyD7s6vZubecf5k6bHeoAM9B79vBC.4Pa8ljAvKLCa'    # 12345678910
 ]
 
+credentials = {
+    "usernames": {
+        "bochtisc@gmail.com": {
+            "name": "Chris",
+            "password": hashed_passwords[0]
+        },
+        "m-oconsultancy@outlook.com": {
+            "name": "Steve",
+            "password": hashed_passwords[1]
+        }
+    }
+}
+
 authenticator = stauth.Authenticate(
-    names, usernames, hashed_passwords,
+    credentials,
     'cookie_name', 'signature_key', cookie_expiry_days=1
 )
 
@@ -29,7 +41,9 @@ elif authentication_status is False:
     st.error('Λάθος email ή κωδικός.')
     st.stop()
 elif authentication_status:
-    st.success(f'Καλωσήρθες {name}!')
+    st.success(f'Καλωσήρθες {name}!")
+    # Εδώ συνεχίζεις με το υπόλοιπο app σου
+
 
 # ======= ΤΟ ΚΥΡΙΩΣ APP ΞΕΚΙΝΑ ΑΠΟ ΕΔΩ ===========
 
