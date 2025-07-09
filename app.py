@@ -8,7 +8,7 @@ import re
 # ----- LOGIN SETUP -----
 # Μπορείς να αλλάξεις τα ονόματα, emails και τα hashed passwords
 
-ames = ['Chris', 'Steve']
+names = ['Chris', 'Steve']
 usernames = ['bochtisc@gmail.com', 'm-oconsultancy@outlook.com']
 hashed_passwords = [
     '$2b$12$2txxtWw8smMumw6J8R0v1.yPL3TS1k4tC6TOkAlq9UJJcCCJhB8rG',   # password: 123456789
