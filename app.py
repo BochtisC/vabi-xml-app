@@ -5,9 +5,6 @@ import openpyxl
 import json
 import re
 
-import streamlit as st
-import streamlit_authenticator as stauth
-
 # Hashes για τα passwords σου
 hashed_passwords = [
     '$2b$12$2txxtWw8smMumw6J8R0v1.yPL3TS1k4tC6TOkAlq9UJJcCCJhB8rG',   # 123456789
