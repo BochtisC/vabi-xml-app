@@ -1,35 +1,9 @@
 import streamlit as st
-import streamlit_authenticator as stauth
 import requests
 import openpyxl
 import json
 import re
 
-names = ['Chris', 'Steve']
-usernames = ['bochtisc@gmail.com', 'm-oconsultancy@outlook.com']
-hashed_passwords = [
-    '$2b$12$2txxtWw8smMumw6J8R0v1.yPL3TS1k4tC6TOkAlq9UJJcCCJhB8rG',   # password: 123456789
-    '$2b$12$MRKfjsYOdcvyyD7s6vZubecf5k6bHeoAM9B79vBC.4Pa8ljAvKLCa'    # password: 12345678910
-]
-
-authenticator = stauth.Authenticate(
-    names, usernames, hashed_passwords,
-    'cookie_name', 'signature_key', cookie_expiry_days=1
-)
-
-name, authentication_status, username = authenticator.login('Σύνδεση', 'main')
-
-if authentication_status is None:
-    st.warning('Συμπλήρωσε email και κωδικό για να μπεις.')
-    st.stop()
-elif authentication_status is False:
-    st.error('Λάθος email ή κωδικός.')
-    st.stop()
-elif authentication_status:
-    st.success(f'Καλωσήρθες {name}!')
-
-
-# ======= ΤΟ ΚΥΡΙΩΣ APP ΞΕΚΙΝΑ ΑΠΟ ΕΔΩ ===========
 
 st.markdown("""
     <style>
