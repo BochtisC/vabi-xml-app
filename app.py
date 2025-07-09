@@ -8,12 +8,11 @@ import re
 # ----- LOGIN SETUP -----
 # Μπορείς να αλλάξεις τα ονόματα, emails και τα hashed passwords
 
-names = ['Chris', 'Steve']
-usernames = ['Bochtisc@gmail.com', 'm-oconsultancy@outlook.com']
-# Πρώτα φτιάχνεις hashes για τα passwords σου (δες πιο κάτω)
+ames = ['Chris', 'Steve']
+usernames = ['bochtisc@gmail.com', 'm-oconsultancy@outlook.com']
 hashed_passwords = [
-    '$2b$12$2txxtWw8smMumw6J8R0v1.yPL3TS1k4tC6TOkAlq9UJJcCCJhB8rG',  # password: 123456789
-    '$2b$12$MRKfjsYOdcvyyD7s6vZubecf5k6bHeoAM9B79vBC.4Pa8ljAvKLCa'   # password: 12345678910
+    '$2b$12$2txxtWw8smMumw6J8R0v1.yPL3TS1k4tC6TOkAlq9UJJcCCJhB8rG',   # password: 123456789
+    '$2b$12$MRKfjsYOdcvyyD7s6vZubecf5k6bHeoAM9B79vBC.4Pa8ljAvKLCa'    # password: 12345678910
 ]
 
 authenticator = stauth.Authenticate(
