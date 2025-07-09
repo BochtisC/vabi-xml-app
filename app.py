@@ -18,11 +18,11 @@ credentials = {
     "usernames": {
         "bochtisc@gmail.com": {
             "name": "Chris",
-            "password": hashed_passwords[0]
+            "password": "$2b$12$2txxtWw8smMumw6J8R0v1.yPL3TS1k4tC6TOkAlq9UJJcCCJhB8rG"
         },
         "m-oconsultancy@outlook.com": {
             "name": "Steve",
-            "password": hashed_passwords[1]
+            "password": "$2b$12$MRKfjsYOdcvyyD7s6vZubecf5k6bHeoAM9B79vBC.4Pa8ljAvKLCa"
         }
     }
 }
