@@ -1,0 +1,88 @@
+[
+    {
+        "source": "clickup",
+        "field": "A1c Straat",
+        "ui_label": "Straat",
+        "xml_path": "./Objecten/Object/ObjectAlgemeen/ObjectAdresgegevens/Straat"
+    },
+    {
+        "source": "clickup",
+        "field": "A3 bouwjaar",
+        "ui_label": "bouwjaar",
+        "xml_path": "./Objecten/Object/Rekenzones/Rekenzone/RekenzoneAlgemeen/Bouwjaar"
+    },
+    {
+        "source": "clickup",
+        "field": "A1c Huisnummer",
+        "ui_label": "Huisnummer",
+        "xml_path": "./Objecten/Object/ObjectAlgemeen/ObjectAdresgegevens/Huisnummer"
+    },
+    {
+        "source": "clickup",
+        "field": "A1c huisnummer toev.",
+        "ui_label": "Huisnummertoevoeging",
+        "xml_path": "./Objecten/Object/ObjectAlgemeen/ObjectAdresgegevens/HuisletterHuisnummertoevoeging"
+    },
+    {
+        "source": "clickup",
+        "field": "A1c Postcode",
+        "ui_label": "Postcode",
+        "xml_path": "./Objecten/Object/ObjectAlgemeen/ObjectAdresgegevens/Postcode"
+    },
+    {
+        "source": "clickup",
+        "field": "A1c Plaats",
+        "ui_label": "Plaats",
+        "xml_path": "./Objecten/Object/ObjectAlgemeen/ObjectAdresgegevens/Woonplaats"
+    },
+    {
+        "source": "clickup",
+        "field": "A1c Adres",
+        "ui_label": "NaamObject",
+        "xml_path": "./Objecten/Object/ObjectAlgemeen/ObjectObject/NaamObject"
+    },
+    {
+        "source": "clickup",
+        "field": "A5a Gebouwmassa Vloeren",
+        "ui_label": "Type Bouwwijze Vloeren",
+        "xml_path": "./Objecten/Object/Rekenzones/Rekenzone/RekenzoneAlgemeen/TypeBouwwijzeVloeren"
+    },
+    {
+        "source": "clickup",
+        "field": "A5b Gebouwmassa GEVELS",
+        "ui_label": "Type Bouwwijze Wanden",
+        "xml_path": "./Objecten/Object/Rekenzones/Rekenzone/RekenzoneAlgemeen/TypeBouwwijzeWanden"
+    },
+    
+    {
+    "source": "excel",
+    "field": "Gebouwhoogte",
+    "sheet": "Algemeen",
+    "cell": "N6",
+    "ui_label": "Gebouwhoogte",
+    "xml_path": "./Objecten/Object/ObjectAlgemeen/ObjectClassificatie/Gebouwhoogte"
+    },
+    {
+    "source": "excel",
+    "field": "Gebruiksoppervlakte",
+    "sheet": "Algemeen",
+    "cell": "E15",
+    "ui_label": "Gebruiksoppervlakte : Totaal",
+    "xml_path": "./Objecten/Object/Rekenzones/Rekenzone/RekenzoneAlgemeen/Gebruiksoppervlakte"
+    },
+    {
+    "source": "excel",
+    "field": "Totaal ",
+    "sheet": "Algemeen",
+    "cell": "E16",
+    "ui_label": "Total oppervlakte",
+    "xml_path": "./Objecten/Object/Rekenzones/Rekenzone/RekenzoneAlgemeen/Verdiepingen/Verdieping/Gebruiksoppervlakte"
+    },
+    {
+    "source": "custom",
+    "field": "Leidingdoorvoeren",
+    "xml_path": "./Objecten/Object/Rekenzones/Rekenzone/RekenzoneAlgemeen/Leidingdoorvoeren",
+    "ui_label": "Leidingdoorvoeren : Onbekend",
+    "fixed_value": "2"
+  }
+]
