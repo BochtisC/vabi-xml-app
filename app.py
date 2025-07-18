@@ -4,7 +4,6 @@ import openpyxl
 import json
 import re
 
-
 st.markdown("""
     <style>
     .stDownloadButton button {
@@ -15,25 +14,33 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 API_TOKEN = "pk_82763580_PX00W04XWNJPJ2YR4M6NCNZ8WQPOLY6O"
-LIST_ID = "901511575020"
-HEADERS = {"Authorization": API_TOKEN}
 
-with open("fields_mapping.json", "r", encoding="utf-8") as f:
-    CLICKUP_FIELDS = json.load(f)
+LIST_IDS = [
+    "901206264874",      # Energielabel Haaglanden
+    "901511575020",      # Mijn EnergieLabel
+    "901504459596",      # Energieinspectie
+]
+
+LIST_MAPPINGS = {
+    "901206264874": "mapping-Energielabel_Haaglanden.json",
+    "901511575020": "mapping-Mijn_EnergieLabel.json",
+    "901504459596": "mapping-EnergieInspectie.json",
+}
+
+LIST_NAMES = {
+    "901206264874": "Energielabel Haaglanden",
+    "901511575020": "Mijn EnergieLabel",
+    "901504459596": "Energie Inspectie",
+}
+
+HEADERS = {"Authorization": API_TOKEN}
 
 def get_tasks(list_id):
     url = f"https://api.clickup.com/api/v2/list/{list_id}/task?archived=false"
     resp = requests.get(url, headers=HEADERS)
     if resp.status_code != 200:
-        st.error(f"ClickUp API Error: {resp.status_code} - {resp.text}")
         return []
     return resp.json().get("tasks", [])
-
-def find_task_by_name(tasks, name):
-    for task in tasks:
-        if task.get("name") == name:
-            return task
-    return None
 
 def extract_custom_fields(task):
     out = {}
@@ -119,31 +126,59 @@ if uploaded_files and len(uploaded_files) >= 2:
             st.error(f"Σφάλμα στο διάβασμα του XML: {e}")
             st.stop()
 
-        # Αυτόματη προσθήκη <Verdieping> αν λείπει
         if "<Verdiepingen>" in xml_text and "<Verdieping>" not in xml_text:
             xml_text = xml_text.replace("<Verdiepingen>", "<Verdiepingen><Verdieping></Verdieping>")
 
-        # Ενημέρωση από Excel
         excel_status = st.empty()
         excel_status.info(f"Ενημέρωση XML από Excel ({selected})...")
-        excel_values = {}
-        try:
-            excel_file.seek(0)
-            wb = openpyxl.load_workbook(excel_file, data_only=True)
-            if "Algemeen" not in wb.sheetnames:
-                excel_status.error("❌ Το Excel δεν περιέχει φύλλο με όνομα 'Algemeen'!")
-                st.stop()
-            ws = wb["Algemeen"]
-            for field in CLICKUP_FIELDS:
-                if field.get("source") == "excel":
-                    cell = field.get("cell", "").replace(" ", "")
-                    value = ws[cell].value if cell else ""
-                    if field["field"] == "Gebruiksoppervlakte" and (value is None or value == ""):
-                        value = "0"
-                    excel_values[field["field"]] = clean_excel_value(value)
-        except Exception as e:
-            excel_status.error(f"❌ Σφάλμα κατά το διάβασμα του Excel: {e}")
+        excel_file.seek(0)
+        wb = openpyxl.load_workbook(excel_file, data_only=True)
+        if "Algemeen" not in wb.sheetnames:
+            excel_status.error("❌ Το Excel δεν περιέχει φύλλο με όνομα 'Algemeen'!")
             st.stop()
+        ws = wb["Algemeen"]
+
+        clickup_status = st.empty()
+        clickup_status.info(f"Ψάχνω στο ClickUp για task με όνομα: {selected}")
+
+        task = None
+        found_list_id = None
+        for list_id in LIST_IDS:
+            try:
+                tasks = get_tasks(list_id)
+            except Exception:
+                continue
+            for t in tasks:
+                if t.get("name") == selected:
+                    task = t
+                    found_list_id = list_id
+                    break
+            if task:
+                break
+
+        if not task:
+            clickup_status.error(f"❌ Δε βρέθηκε task στο ClickUp με όνομα '{selected}'.")
+            st.stop()
+
+        # Εμφανίζει το φιλικό όνομα λίστας!
+        clickup_status.success(
+            f"Βρέθηκε task στο ClickUp: {selected} στη λίστα: {LIST_NAMES.get(found_list_id, found_list_id)}"
+        )
+
+        mapping_file = LIST_MAPPINGS[found_list_id]
+        with open(mapping_file, "r", encoding="utf-8") as f:
+            CLICKUP_FIELDS = json.load(f)
+
+        fields = extract_custom_fields(task)
+
+        excel_values = {}
+        for field in CLICKUP_FIELDS:
+            if field.get("source") == "excel":
+                cell = field.get("cell", "").replace(" ", "")
+                value = ws[cell].value if cell else ""
+                if field["field"] == "Gebruiksoppervlakte" and (value is None or value == ""):
+                    value = "0"
+                excel_values[field["field"]] = clean_excel_value(value)
 
         missing_excels = [f["ui_label"] for f in CLICKUP_FIELDS if f.get("source") == "excel" and not excel_values.get(f["field"])]
         if missing_excels:
@@ -156,20 +191,6 @@ if uploaded_files and len(uploaded_files) >= 2:
                 val = excel_values.get(field["field"], "")
                 st.markdown(f"✅ Τιμή {field['ui_label']} από Excel ({field.get('cell','')}): <b>{val}</b>", unsafe_allow_html=True)
 
-        # ClickUp data
-        clickup_status = st.empty()
-        clickup_status.info(f"Ψάχνω στο ClickUp για task με όνομα: {selected}")
-        tasks = get_tasks(LIST_ID)
-        if not tasks:
-            clickup_status.error("❌ Δε βρέθηκαν tasks στο ClickUp ή αποτυχία σύνδεσης.")
-            st.stop()
-        task = find_task_by_name(tasks, selected)
-        if not task:
-            clickup_status.error(f"❌ Δε βρέθηκε task στο ClickUp με όνομα '{selected}'.")
-            st.stop()
-        fields = extract_custom_fields(task)
-        clickup_status.success(f"Βρέθηκε task στο ClickUp: {selected}")
-
         xml_status = st.empty()
         col1, col2 = st.columns([8, 1])
         with col2:
@@ -179,7 +200,6 @@ if uploaded_files and len(uploaded_files) >= 2:
 
         updated_fields = {}
 
-        # ClickUp πεδία
         for field in CLICKUP_FIELDS:
             if field.get("source") == "clickup":
                 ck_field = field["field"]
@@ -193,12 +213,10 @@ if uploaded_files and len(uploaded_files) >= 2:
                     updated_value = value
                 updated_fields[ck_field] = updated_value.strip() if updated_value else ""
 
-        # Excel πεδία
         for field in CLICKUP_FIELDS:
             if field.get("source") == "excel":
                 updated_fields[field["field"]] = excel_values.get(field["field"], "")
 
-        # Custom/fixed value πεδία από το mapping (αν υπάρχει fixed_value)
         for field in CLICKUP_FIELDS:
             if "fixed_value" in field:
                 updated_fields[field["field"]] = field["fixed_value"]
@@ -214,7 +232,6 @@ if uploaded_files and len(uploaded_files) >= 2:
         else:
             xml_status.empty()
 
-        # ΕΦΑΡΜΟΓΗ PATCH στο XML
         try:
             new_xml = patch_or_insert_tag(xml_text, CLICKUP_FIELDS, updated_fields)
             st.download_button(
