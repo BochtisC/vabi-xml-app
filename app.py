@@ -273,7 +273,7 @@ if uploaded_files and len(uploaded_files) >= 2:
         with col2:
             edit_mode = st.toggle("✏️", key="edit_fields")
         with col1:
-            st.markdown("### Συμπλήρωση στο XML από ClickUp & Excel")
+            st.markdown("Επεξεργασία στο XML")
 
         updated_fields = {}
         for field in CLICKUP_FIELDS:
