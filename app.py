@@ -126,7 +126,7 @@ def checkmark(val):
     except:
         return val
 
-st.title("XML Update (ανά λίστα το σωστό mapping)")
+st.title("XML Update")
 
 uploaded_files = st.file_uploader(
     "Ανέβασε τα δύο αρχεία (XML + Excel με ίδιο όνομα, drag & drop μαζί)",
