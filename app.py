@@ -4,6 +4,7 @@ import openpyxl
 import json
 import re
 import pandas as pd
+import datetime
 
 st.markdown("""
     <style>
@@ -15,7 +16,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 API_TOKEN = "pk_82763580_PX00W04XWNJPJ2YR4M6NCNZ8WQPOLY6O"
-
 LIST_IDS = [
     "901206264874",      # Energielabel Haaglanden
     "901511575020",      # Mijn EnergieLabel
@@ -31,7 +31,7 @@ LIST_MAPPINGS = {
 LIST_NAMES = {
     "901206264874": "Energielabel Haaglanden",
     "901511575020": "Mijn EnergieLabel",
-    "901504459596": "Energie Inspectie",
+    "901504459596": "Εnergie Inspectie",
 }
 
 HEADERS = {"Authorization": API_TOKEN}
@@ -45,11 +45,26 @@ def get_tasks(list_id):
 
 def extract_custom_fields(task):
     out = {}
+    dropdown_options = {}
+    for f in task.get("custom_fields", []):
+        if f.get("type") in ["drop_down", "dropdown"] and "type_config" in f and "options" in f["type_config"]:
+            dropdown_options[f["name"]] = f["type_config"]["options"]
     for field in task.get("custom_fields", []):
         name = field.get("name")
         value = field.get("value")
-        if value is not None:
+        typ = field.get("type")
+        if typ in ["drop_down", "dropdown"] and value is not None:
+            options = dropdown_options.get(name, [])
+            label = None
+            for opt in options:
+                if ("orderindex" in opt and opt["orderindex"] == value) or ("id" in opt and opt["id"] == value):
+                    label = opt["name"]
+                    break
+            out[name] = {"id": value, "label": label if label is not None else str(value)}
+        elif value is not None:
             out[name] = str(value)
+        else:
+            out[name] = ""
     return out
 
 def clean_excel_value(value):
@@ -62,39 +77,6 @@ def clean_excel_value(value):
         num = parts[0].replace(",", ".")
         return num
     return str(value)
-
-def patch_or_insert_tag(xml_text, mapping, values):
-    new_xml = xml_text
-    for field in mapping:
-        if field.get("source") not in ("clickup", "excel", "custom"):
-            continue
-        value = values.get(field["field"], "")
-        xml_path = field.get("xml_path")
-        if not xml_path or '/' not in xml_path:
-            continue
-        path_parts = xml_path.strip('./').split('/')
-        tag = path_parts[-1]
-        parent_tag = path_parts[-2] if len(path_parts) > 1 else None
-        if parent_tag:
-            parent_pattern = re.compile(
-                f'(<{parent_tag}.*?>)(.*?)(</{parent_tag}>)',
-                re.DOTALL | re.IGNORECASE
-            )
-            def replace_in_parent(m):
-                content = m.group(2)
-                tag_pattern = re.compile(f'(<{tag}>)(.*?)(</{tag}>)', re.DOTALL)
-                if tag_pattern.search(content):
-                    new_content = tag_pattern.sub(rf'\1{value}\3', content)
-                    return m.group(1) + new_content + m.group(3)
-                else:
-                    insert_text = f'<{tag}>{value}</{tag}>'
-                    new_content = content + insert_text
-                    return m.group(1) + new_content + m.group(3)
-            new_xml = parent_pattern.sub(replace_in_parent, new_xml)
-        else:
-            tag_pattern = re.compile(f'(<{tag}>)(.*?)(</{tag}>)', re.DOTALL)
-            new_xml = tag_pattern.sub(rf'\1{value}\3', new_xml)
-    return new_xml
 
 def get_rz_values(ws, column, num_rows):
     vals = []
@@ -126,7 +108,79 @@ def checkmark(val):
     except:
         return val
 
-st.title("XML Update")
+# ΝΕΟ string-only smart patch για XML ώστε αν λείπει parent, το block προστίθεται στην αρχή του ObjectAlgemeen!
+def smart_patch_xml(xml_text, mappings, values, root_tag='Objecten'):
+    xml = xml_text
+
+    def patch_xml_tag(xml, xml_path, value):
+        path_parts = xml_path.strip('./').split('/')
+        if not path_parts:
+            return xml
+        parent_path = path_parts[:-1]
+        final_tag = path_parts[-1]
+        parent_tag = parent_path[-1] if parent_path else None
+
+        new_tag = f"<{final_tag}>{value}</{final_tag}>"
+
+        if parent_tag:
+            parent_pattern = rf'(<{parent_tag}[^>]*>)(.*?)(</{parent_tag}>)'
+            m = re.search(parent_pattern, xml, flags=re.DOTALL)
+            if m:
+                inside = m.group(2)
+                tag_pattern = rf'(<{final_tag}>)(.*?)(</{final_tag}>)'
+                if re.search(tag_pattern, inside, flags=re.DOTALL):
+                    # update existing value
+                    new_inside = re.sub(tag_pattern, rf'\1{value}\3', inside, flags=re.DOTALL)
+                else:
+                    # append new tag at the end of parent
+                    new_inside = inside + new_tag
+                return xml[:m.start(2)] + new_inside + xml[m.end(2):]
+            else:
+                # Αν δεν υπάρχει το parent, βάλε το block ΣΤΗΝ ΑΡΧΗ του ObjectAlgemeen
+                object_algemeen_pattern = r'(<ObjectAlgemeen[^>]*>)(.*?)(</ObjectAlgemeen>)'
+                obj_match = re.search(object_algemeen_pattern, xml, flags=re.DOTALL)
+                if obj_match:
+                    parent_block = f"<{parent_tag}>{new_tag}</{parent_tag}>"
+                    new_content = parent_block + obj_match.group(2)
+                    return (
+                        xml[:obj_match.start(2)] +
+                        new_content +
+                        xml[obj_match.end(2):]
+                    )
+                else:
+                    # fallback: στην αρχή του root tag αν υπάρχει
+                    root_tag = path_parts[0]
+                    root_open = re.search(rf'(<{root_tag}[^>]*>)', xml, flags=re.IGNORECASE)
+                    if root_open:
+                        parent_block = f"<{parent_tag}>{new_tag}</{parent_tag}>"
+                        return xml[:root_open.end()] + parent_block + xml[root_open.end():]
+                    else:
+                        # αν δεν βρει τίποτα, απλά το βάζει στην αρχή
+                        return f"<{parent_tag}>{new_tag}</{parent_tag}>" + xml
+        else:
+            # δεν υπάρχει parent, πρόσθεσέ το στην αρχή του root (π.χ. /Tag1)
+            root_tag = path_parts[0]
+            root_open = re.search(rf'(<{root_tag}[^>]*>)', xml, flags=re.IGNORECASE)
+            if root_open:
+                return xml[:root_open.end()] + new_tag + xml[root_open.end():]
+            else:
+                return new_tag + xml
+
+    for field in mappings:
+        xml_path = field.get("xml_path")
+        if not xml_path or "/" not in xml_path:
+            continue
+        value = values.get(field["field"], "")
+        if isinstance(value, dict):
+            xml_value_type = field.get("xml_value_type", "id")
+            value = value.get(xml_value_type, value.get("id", ""))
+        if value != "":
+            xml = patch_xml_tag(xml, xml_path, value)
+    return xml
+
+# ---- ΤΕΛΟΣ ΝΕΑΣ FUNCTION ----
+
+st.title("XML Update (Label στο UI, id/label στο XML βάση mapping)")
 
 uploaded_files = st.file_uploader(
     "Ανέβασε τα δύο αρχεία (XML + Excel με ίδιο όνομα, drag & drop μαζί)",
@@ -174,7 +228,6 @@ if uploaded_files and len(uploaded_files) >= 2:
         rz2_vals = get_rz_values(ws, "C", num_verdiepingen)
         rz3_vals = get_rz_values(ws, "D", num_verdiepingen)
 
-        # ---- Προβολή πίνακα με checkmark και σύνολα ----
         data = []
         for i in range(num_verdiepingen):
             row = {
@@ -195,14 +248,10 @@ if uploaded_files and len(uploaded_files) >= 2:
         })
         df = pd.DataFrame(data)
 
-        # --- ΠΡΑΣΙΝΗ ΕΝΟΤΗΤΑ για Excel ---
         st.success(f"Βρέθηκε Excel: {selected}.xlsx (φύλλο: Algemeen)")
         st.markdown("#### Τιμές Verdiepingen ανά rz (από Excel):")
         st.table(df)
 
-        # -------- ΕΔΩ εμφανίζεις τα Excel fields (πριν το ClickUp!) --------
-        # Θα φορτωθεί το σωστό mapping αφού βρεθεί το σωστό task/list
-        # --- Βρίσκεις πρώτα το σωστό task/list για να ξέρεις το mapping που χρειάζεσαι για να βρεις fields!
         task = None
         found_list_id = None
         for list_id in LIST_IDS:
@@ -222,7 +271,6 @@ if uploaded_files and len(uploaded_files) >= 2:
             st.error(f"❌ Δε βρέθηκε task στο ClickUp με όνομα '{selected}'.")
             st.stop()
 
-        # --- Εδώ διαλέγεις ΤΟ ΣΩΣΤΟ mapping για τη σωστή λίστα ---
         mapping_file = LIST_MAPPINGS.get(found_list_id)
         if mapping_file is None:
             st.error(f"❌ Δεν βρέθηκε mapping για λίστα: {found_list_id}")
@@ -230,7 +278,6 @@ if uploaded_files and len(uploaded_files) >= 2:
         with open(mapping_file, "r", encoding="utf-8") as f:
             CLICKUP_FIELDS = json.load(f)
 
-        # ---- Τώρα έχεις το σωστό mapping, μπορείς να εμφανίσεις τα Excel πεδία σωστά εδώ ----
         excel_values = {}
         for field in CLICKUP_FIELDS:
             if field.get("source") == "excel":
@@ -248,55 +295,51 @@ if uploaded_files and len(uploaded_files) >= 2:
         if excel_block:
             st.markdown(excel_block, unsafe_allow_html=True)
 
-        # ------- ΤΩΡΑ ξεκινάει το ClickUp block --------
         clickup_status = st.empty()
         clickup_status.info(f"Ψάχνω στο ClickUp για task με όνομα: {selected}")
 
-        # Εμφανίζει το φιλικό όνομα λίστας!
         st.success(f"Βρέθηκε task στο ClickUp: {selected} στη λίστα: {LIST_NAMES.get(found_list_id, found_list_id)}")
 
         fields = extract_custom_fields(task)
 
-        # -- CLICKUP ΠΕΔΙΑ --
-        clickup_block = ""
+        # --- ΠΕΡΝΑΜΕ ΚΑΙ ΤΗΝ ΗΜΕΡΟΜΗΝΙΑ ΔΗΜΙΟΥΡΓΙΑΣ (date_created) ---
+        if "date_created" in task:
+            try:
+                ts = int(task["date_created"]) / 1000
+                fields["date_created"] = datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+            except Exception:
+                fields["date_created"] = ""
+        # -----------------------------------------------------------
+
+        # Προβολή label στη φόρμα (προεπισκόπηση)
         for field in CLICKUP_FIELDS:
             if field.get("source") == "clickup":
                 val = fields.get(field["field"], "")
-                icon = "✅" if val else "❌"
-                clickup_block += f"{icon} <b>{field['ui_label']}</b>: <span style='color:#222'>{val}</span><br>"
-        if clickup_block:
-            st.markdown(clickup_block, unsafe_allow_html=True)
-
-        # --- Editing επιλογή ---
-        xml_status = st.empty()
-        col1, col2 = st.columns([8, 1])
-        with col2:
-            edit_mode = st.toggle("✏️", key="edit_fields")
-        with col1:
-            st.markdown("### Επεξεργασία στο XML")
+                # Ειδική διαχείριση για date_created, για να εμφανίζει ωραία label
+                if field["field"] == "date_created":
+                    label = val
+                else:
+                    label = val["label"] if isinstance(val, dict) else val
+                icon = "✅" if label else "❌"
+                st.markdown(f"{icon} <b>{field['ui_label']}</b>: <span style='color:#222'>{label or '(κενό)'}</span><br>", unsafe_allow_html=True)
+            elif field.get("source") == "excel":
+                val = excel_values.get(field["field"], "")
+                st.markdown(f"📄 <b>{field['ui_label']}</b>: <span style='color:#222'>{val}</span>", unsafe_allow_html=True)
+            elif field.get("source") == "custom":
+                val = field.get("fixed_value", "")
+                st.markdown(f"🔒 <b>{field['ui_label']}</b>: <span style='color:#222'>{val}</span>", unsafe_allow_html=True)
 
         updated_fields = {}
         for field in CLICKUP_FIELDS:
             if field.get("source") == "clickup":
-                ck_field = field["field"]
-                xml_label = field["ui_label"]
-                value = fields.get(ck_field, "")
-                if edit_mode:
-                    updated_value = st.text_input(f"{xml_label}", value=value, key=f"edit_{ck_field}")
-                else:
-                    updated_value = value
-                updated_fields[ck_field] = updated_value.strip() if updated_value else ""
-
-        for field in CLICKUP_FIELDS:
-            if field.get("source") == "excel":
+                updated_fields[field["field"]] = fields.get(field["field"], "")
+            elif field.get("source") == "excel":
                 updated_fields[field["field"]] = excel_values.get(field["field"], "")
-
-        for field in CLICKUP_FIELDS:
-            if "fixed_value" in field:
-                updated_fields[field["field"]] = field["fixed_value"]
+            elif field.get("source") == "custom":
+                updated_fields[field["field"]] = field.get("fixed_value", "")
 
         try:
-            new_xml = patch_or_insert_tag(xml_text, CLICKUP_FIELDS, updated_fields)
+            new_xml = smart_patch_xml(xml_text, CLICKUP_FIELDS, updated_fields)
             if re.search(r'<Rekenzone>.*?<Naam>rz1</Naam>', new_xml, re.DOTALL):
                 new_xml = update_verdiepingen_in_rekenzone(new_xml, "rz1", rz1_vals)
             if re.search(r'<Rekenzone>.*?<Naam>rz2</Naam>', new_xml, re.DOTALL):
@@ -311,7 +354,7 @@ if uploaded_files and len(uploaded_files) >= 2:
                 mime="application/xml"
             )
         except Exception as e:
-            xml_status.error(f"Σφάλμα: {e}")
+            st.error(f"Σφάλμα: {e}")
 
 else:
     st.info("Ανέβασε δύο αρχεία με το ίδιο όνομα (XML & Excel) μαζί, με drag & drop.")
