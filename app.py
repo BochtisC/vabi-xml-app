@@ -180,7 +180,7 @@ def smart_patch_xml(xml_text, mappings, values, root_tag='Objecten'):
 
 # ---- ΤΕΛΟΣ ΝΕΑΣ FUNCTION ----
 
-st.title("XML Update (Label στο UI, id/label στο XML βάση mapping)")
+st.title("XML Update")
 
 uploaded_files = st.file_uploader(
     "Ανέβασε τα δύο αρχεία (XML + Excel με ίδιο όνομα, drag & drop μαζί)",
