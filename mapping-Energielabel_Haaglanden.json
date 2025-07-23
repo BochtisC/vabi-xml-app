@@ -43,17 +43,31 @@
     },
     {
         "source": "clickup",
-        "field": "A5a Gebouwmassa Vloeren*",
+        "field": "A5a Gebouwmassa Vloeren",
         "ui_label": "Type Bouwwijze Vloeren",
-        "xml_path": "./Objecten/Object/Rekenzones/Rekenzone/RekenzoneAlgemeen/TypeBouwwijzeVloeren"
+        "xml_path": "./Objecten/Object/Rekenzones/Rekenzone/RekenzoneAlgemeen/TypeBouwwijzeVloeren",
+        "xml_value_type": "id" 
     },
     {
         "source": "clickup",
         "field": "A5b Gebouwmassa GEVELS",
         "ui_label": "Type Bouwwijze Wanden",
-        "xml_path": "./Objecten/Object/Rekenzones/Rekenzone/RekenzoneAlgemeen/TypeBouwwijzeWanden"
+        "xml_path": "./Objecten/Object/Rekenzones/Rekenzone/RekenzoneAlgemeen/TypeBouwwijzeWanden",
+        "xml_value_type": "id" 
     },
-    
+    {
+        "source": "clickup",
+        "field": "Adviseur",
+        "ui_label": "Adviseur",
+        "xml_path": "./Objecten/Object/ObjectAlgemeen/RegistratieGegevensInvoer/InvoerendeEpAdviseur",
+        "xml_value_type": "label" 
+    },
+    {
+    "source": "clickup",
+    "field": "date_created",
+    "ui_label": "Invoerdatum",
+    "xml_path": "./Objecten/Object/ObjectAlgemeen/RegistratieGegevensInvoer/Invoerdatum"
+    },
     {
     "source": "excel",
     "field": "Gebouwhoogte",
@@ -63,20 +77,11 @@
     "xml_path": "./Objecten/Object/ObjectAlgemeen/ObjectClassificatie/Gebouwhoogte"
     },
     {
-    "source": "excel",
-    "field": "Totaal ",
-    "sheet": "Algemeen",
-    "cell": "E16",
-    "ui_label": "Totaαl oppervlakte",
-    "xml_path": "./Objecten/Object/Rekenzones/Rekenzone/RekenzoneAlgemeen/Verdiepingen/Verdieping/Gebruiksoppervlakte"
-    },
-    {
-    "source": "excel",
+    "source": "custom",
     "field": "Gebruiksoppervlakte",
-    "sheet": "Algemeen",
-    "cell": "E15",
-    "ui_label": "Gebruiksoppervlakte : Totaal",
-    "xml_path": "./Objecten/Object/Rekenzones/Rekenzone/RekenzoneAlgemeen/Gebruiksoppervlakte"
+    "xml_path": "./Objecten/Object/Rekenzones/Rekenzone/RekenzoneAlgemeen/Gebruiksoppervlakte",
+    "ui_label": "Gebruiksoppervlakte per Verdieping",
+    "fixed_value": "1"
     },
     {
     "source": "custom",
@@ -84,5 +89,12 @@
     "xml_path": "./Objecten/Object/Rekenzones/Rekenzone/RekenzoneAlgemeen/Leidingdoorvoeren",
     "ui_label": "Leidingdoorvoeren : Onbekend",
     "fixed_value": "2"
-  }
+    },
+    {
+    "source": "custom",
+    "field": "Bezoekende Ep Adviseur",
+    "xml_path": "./Objecten/Object/ObjectAlgemeen/RegistratieGegevensInvoer/BezoekendeEpAdviseurGelijkAanRegistrerendeEpAdviseur",
+    "ui_label": "Ep Adviseur : Yes ",
+    "fixed_value": "1"
+    }
 ]
