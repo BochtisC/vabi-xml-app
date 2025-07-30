@@ -1,37 +1,37 @@
 [
     {
         "source": "clickup",
-        "field": "A1c Straat",
+        "field": "A1d Straat",
         "ui_label": "Straat",
         "xml_path": "./Objecten/Object/ObjectAlgemeen/ObjectAdresgegevens/Straat"
     },
     {
         "source": "clickup",
-        "field": "A1c Huisnummer",
+        "field": "A1e Huisnummer",
         "ui_label": "Huisnummer",
         "xml_path": "./Objecten/Object/ObjectAlgemeen/ObjectAdresgegevens/Huisnummer"
     },
     {
         "source": "clickup",
-        "field": "A1c huisnummer toev.",
+        "field": "A1f huisnummer toev.",
         "ui_label": "Huisnummertoevoeging",
         "xml_path": "./Objecten/Object/ObjectAlgemeen/ObjectAdresgegevens/HuisletterHuisnummertoevoeging"
     },
     {
         "source": "clickup",
-        "field": "A1c Postcode",
+        "field": "A1g Postcode",
         "ui_label": "Postcode",
         "xml_path": "./Objecten/Object/ObjectAlgemeen/ObjectAdresgegevens/Postcode"
     },
     {
         "source": "clickup",
-        "field": "A1c Plaats",
+        "field": "A1h Plaats",
         "ui_label": "Plaats",
         "xml_path": "./Objecten/Object/ObjectAlgemeen/ObjectAdresgegevens/Woonplaats"
     },
     {
         "source": "clickup",
-        "field": "A3 bouwjaar",
+        "field": "A2a bouwjaar",
         "ui_label": "bouwjaar",
         "xml_path": "./Objecten/Object/Rekenzones/Rekenzone/RekenzoneAlgemeen/Bouwjaar"
     },
@@ -43,14 +43,14 @@
     },
     {
         "source": "clickup",
-        "field": "A5a Gebouwmassa Vloeren",
+        "field": "A2d Gebouwmassa Vloeren",
         "ui_label": "Type Bouwwijze Vloeren",
         "xml_path": "./Objecten/Object/Rekenzones/Rekenzone/RekenzoneAlgemeen/TypeBouwwijzeVloeren",
         "xml_value_type": "id" 
     },
     {
         "source": "clickup",
-        "field": "A5b Gebouwmassa GEVELS",
+        "field": "A2e Gebouwmassa GEVELS",
         "ui_label": "Type Bouwwijze Wanden",
         "xml_path": "./Objecten/Object/Rekenzones/Rekenzone/RekenzoneAlgemeen/TypeBouwwijzeWanden",
         "xml_value_type": "id" 
