@@ -193,10 +193,13 @@ if uploaded_files and len(uploaded_files) >= 2:
     for f in uploaded_files:
         ext = f.name.rsplit('.', 1)[-1].lower()
         base = f.name.rsplit('.', 1)[0]
-        files_by_type.setdefault(ext, {})[base] = f
+        files_by_type.setdefault(ext, {})[base.strip()] = f   # STRIP PATCH base
 
     xml_files = files_by_type.get('xml', {})
     excel_files = {**files_by_type.get('xlsx', {}), **files_by_type.get('xls', {})}
+    # STRIP PATCH: strip keys!
+    xml_files = {k.strip(): v for k, v in xml_files.items()}
+    excel_files = {k.strip(): v for k, v in excel_files.items()}
     common_names = set(xml_files) & set(excel_files)
 
     if not common_names:
@@ -260,7 +263,8 @@ if uploaded_files and len(uploaded_files) >= 2:
             except Exception:
                 continue
             for t in tasks:
-                if t.get("name") == selected:
+                # STRIP PATCH για σύγκριση ονομάτων χωρίς κενά!
+                if t.get("name", "").strip() == selected.strip():
                     task = t
                     found_list_id = list_id
                     break
