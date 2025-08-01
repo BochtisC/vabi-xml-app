@@ -60,12 +60,10 @@ def extract_custom_fields(task):
                 if ("orderindex" in opt and opt["orderindex"] == value) or ("id" in opt and opt["id"] == value):
                     label = opt["name"]
                     break
-            # STRIP PATCH: strip label if string
             if label is not None and isinstance(label, str):
                 label = label.strip()
             out[name] = {"id": value, "label": label if label is not None else str(value).strip()}
         elif value is not None:
-            # STRIP PATCH: strip string values!
             out[name] = str(value).strip() if isinstance(value, str) else str(value)
         else:
             out[name] = ""
@@ -79,8 +77,8 @@ def clean_excel_value(value):
     if isinstance(value, str):
         parts = value.strip().split()
         num = parts[0].replace(",", ".")
-        return num.strip()     # STRIP PATCH: extra strip
-    return str(value).strip()  # STRIP PATCH
+        return num.strip()
+    return str(value).strip()
 
 def get_rz_values(ws, column, num_rows):
     vals = []
@@ -89,7 +87,7 @@ def get_rz_values(ws, column, num_rows):
         v = ws[f"{column}{row}"].value
         if v is not None and str(v).strip() != "":
             num = str(v).split()[0].replace(",", ".")
-            vals.append(num.strip())    # STRIP PATCH
+            vals.append(num.strip())
         else:
             vals.append("0")
     return vals
@@ -102,6 +100,12 @@ def update_verdiepingen_in_rekenzone(xml_text, rz_name, verdieping_values):
         head, old_content, tail, after = match.group(1), match.group(2), match.group(3), match.group(4)
         new_content = ""
         for val in verdieping_values:
+            try:
+                if float(val.replace(",", ".")) == 0:
+                    continue
+            except Exception:
+                if not val or val.strip() == "":
+                    continue
             new_content += f"<Verdieping><Gebruiksoppervlakte>{val}</Gebruiksoppervlakte></Verdieping>"
         return head + new_content + tail + after
     return pattern.sub(replacement, xml_text)
@@ -171,14 +175,47 @@ def smart_patch_xml(xml_text, mappings, values, root_tag='Objecten'):
         if isinstance(value, dict):
             xml_value_type = field.get("xml_value_type", "id")
             value = value.get(xml_value_type, value.get("id", ""))
-        # STRIP PATCH
         if isinstance(value, str):
             value = value.strip()
         if value != "":
             xml = patch_xml_tag(xml, xml_path, value)
     return xml
 
-# ---- END OF PATCHES ----
+def safe_patch_algemeen_fields(xml_text, rz_name, extra_fields):
+    """
+    Προσθέτει fields ΜΟΝΟ αν λείπουν ή είναι κενά ΜΕΣΑ στο <RekenzoneAlgemeen> του κάθε rz.
+    ΔΕΝ αλλάζει τη δομή, ούτε πειράζει verdiepingen/άλλα sections.
+    """
+    pattern = re.compile(
+        rf'(<Rekenzone>.*?<Naam>{rz_name}</Naam>.*?<RekenzoneAlgemeen>)(.*?)(</RekenzoneAlgemeen>)',
+        re.DOTALL)
+    def repl(match):
+        head, content, tail = match.group(1), match.group(2), match.group(3)
+        for tag, val in extra_fields.items():
+            # Ψάχνει ΜΟΝΟ μέσα στο συγκεκριμένο block!
+            tag_pattern = re.compile(rf'<{tag}[^>]*>(.*?)</{tag}>', re.DOTALL)
+            found = tag_pattern.search(content)
+            if found:
+                if found.group(1).strip() == "":
+                    # Το tag υπάρχει αλλά είναι ΚΕΝΟ, αντικατάστησέ το με αυτό που θες
+                    content = tag_pattern.sub(f'<{tag}>{val}</{tag}>', content)
+                # Αν υπάρχει και έχει τιμή, δεν κάνει τίποτα
+            else:
+                # Αν δεν υπάρχει καθόλου, το προσθέτει στο τέλος του Algemeen
+                content += f"<{tag}>{val}</{tag}>"
+        return head + content + tail
+    return pattern.sub(repl, xml_text)
+
+def extract_nonempty_fields_from_rekenzone(xml_text, rz_name, tag_list):
+    result = {}
+    for tag in tag_list:
+        pattern = re.compile(
+            rf'<Rekenzone>.*?<Naam>{rz_name}</Naam>.*?<RekenzoneAlgemeen>.*?<({tag})>(.*?)</\1>.*?</RekenzoneAlgemeen>',
+            re.DOTALL)
+        m = pattern.search(xml_text)
+        if m and m.group(2).strip():
+            result[tag] = m.group(2).strip()
+    return result
 
 st.title("XML Update")
 
@@ -193,11 +230,10 @@ if uploaded_files and len(uploaded_files) >= 2:
     for f in uploaded_files:
         ext = f.name.rsplit('.', 1)[-1].lower()
         base = f.name.rsplit('.', 1)[0]
-        files_by_type.setdefault(ext, {})[base.strip()] = f   # STRIP PATCH base
+        files_by_type.setdefault(ext, {})[base.strip()] = f
 
     xml_files = files_by_type.get('xml', {})
     excel_files = {**files_by_type.get('xlsx', {}), **files_by_type.get('xls', {})}
-    # STRIP PATCH: strip keys!
     xml_files = {k.strip(): v for k, v in xml_files.items()}
     excel_files = {k.strip(): v for k, v in excel_files.items()}
     common_names = set(xml_files) & set(excel_files)
@@ -226,7 +262,7 @@ if uploaded_files and len(uploaded_files) >= 2:
             v = ws[f"B{i}"].value
             if v is not None and str(v).strip() != "":
                 num = str(v).split()[0].replace(",", ".")
-                rz1_vals.append(num.strip())   # STRIP PATCH
+                rz1_vals.append(num.strip())
         num_verdiepingen = len(rz1_vals)
         rz2_vals = get_rz_values(ws, "C", num_verdiepingen)
         rz3_vals = get_rz_values(ws, "D", num_verdiepingen)
@@ -240,9 +276,9 @@ if uploaded_files and len(uploaded_files) >= 2:
                 "rz3 (D)": checkmark(rz3_vals[i])
             }
             data.append(row)
-        sum_b = sum([float(x) for x in rz1_vals])
-        sum_c = sum([float(x) for x in rz2_vals])
-        sum_d = sum([float(x) for x in rz3_vals])
+        sum_b = sum([float(x) for x in rz1_vals if x and float(x.replace(",", ".")) != 0])
+        sum_c = sum([float(x) for x in rz2_vals if x and float(x.replace(",", ".")) != 0])
+        sum_d = sum([float(x) for x in rz3_vals if x and float(x.replace(",", ".")) != 0])
         data.append({
             "Verdieping": "ΣΥΝΟΛΟ",
             "rz1 (B)": f"{sum_b:.2f}",
@@ -263,7 +299,6 @@ if uploaded_files and len(uploaded_files) >= 2:
             except Exception:
                 continue
             for t in tasks:
-                # STRIP PATCH για σύγκριση ονομάτων χωρίς κενά!
                 if t.get("name", "").strip() == selected.strip():
                     task = t
                     found_list_id = list_id
@@ -336,7 +371,7 @@ if uploaded_files and len(uploaded_files) >= 2:
                 if isinstance(val, dict):
                     updated_fields[field["field"]] = val
                 elif isinstance(val, str):
-                    updated_fields[field["field"]] = val.strip()     # STRIP PATCH
+                    updated_fields[field["field"]] = val.strip()
                 else:
                     updated_fields[field["field"]] = val
             elif field.get("source") == "excel":
@@ -344,7 +379,6 @@ if uploaded_files and len(uploaded_files) >= 2:
             elif field.get("source") == "custom":
                 updated_fields[field["field"]] = field.get("fixed_value", "")
 
-        # -- STRIP PATCH: strip όλα τα string values στα updated_fields --
         for k, v in updated_fields.items():
             if isinstance(v, str):
                 updated_fields[k] = v.strip()
@@ -357,6 +391,14 @@ if uploaded_files and len(uploaded_files) >= 2:
                 new_xml = update_verdiepingen_in_rekenzone(new_xml, "rz2", rz2_vals)
             if re.search(r'<Rekenzone>.*?<Naam>rz3</Naam>', new_xml, re.DOTALL):
                 new_xml = update_verdiepingen_in_rekenzone(new_xml, "rz3", rz3_vals)
+
+            extra_fields = extract_nonempty_fields_from_rekenzone(
+                new_xml, "rz1",
+                ["Bouwjaar", "TypeBouwwijzeVloeren", "TypeBouwwijzeWanden", "Gebruiksoppervlakte", "Leidingdoorvoeren"]
+            )
+            for rz_name in ["rz2", "rz3"]:
+                if re.search(rf'<Rekenzone>.*?<Naam>{rz_name}</Naam>', new_xml, re.DOTALL):
+                    new_xml = safe_patch_algemeen_fields(new_xml, rz_name, extra_fields)
 
             st.download_button(
                 label="Κατέβασε το νέο XML",
