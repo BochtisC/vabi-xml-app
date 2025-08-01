@@ -60,9 +60,13 @@ def extract_custom_fields(task):
                 if ("orderindex" in opt and opt["orderindex"] == value) or ("id" in opt and opt["id"] == value):
                     label = opt["name"]
                     break
-            out[name] = {"id": value, "label": label if label is not None else str(value)}
+            # STRIP PATCH: strip label if string
+            if label is not None and isinstance(label, str):
+                label = label.strip()
+            out[name] = {"id": value, "label": label if label is not None else str(value).strip()}
         elif value is not None:
-            out[name] = str(value)
+            # STRIP PATCH: strip string values!
+            out[name] = str(value).strip() if isinstance(value, str) else str(value)
         else:
             out[name] = ""
     return out
@@ -75,8 +79,8 @@ def clean_excel_value(value):
     if isinstance(value, str):
         parts = value.strip().split()
         num = parts[0].replace(",", ".")
-        return num
-    return str(value)
+        return num.strip()     # STRIP PATCH: extra strip
+    return str(value).strip()  # STRIP PATCH
 
 def get_rz_values(ws, column, num_rows):
     vals = []
@@ -85,7 +89,7 @@ def get_rz_values(ws, column, num_rows):
         v = ws[f"{column}{row}"].value
         if v is not None and str(v).strip() != "":
             num = str(v).split()[0].replace(",", ".")
-            vals.append(num)
+            vals.append(num.strip())    # STRIP PATCH
         else:
             vals.append("0")
     return vals
@@ -108,7 +112,6 @@ def checkmark(val):
     except:
         return val
 
-# ΝΕΟ string-only smart patch για XML ώστε αν λείπει parent, το block προστίθεται στην αρχή του ObjectAlgemeen!
 def smart_patch_xml(xml_text, mappings, values, root_tag='Objecten'):
     xml = xml_text
 
@@ -129,14 +132,11 @@ def smart_patch_xml(xml_text, mappings, values, root_tag='Objecten'):
                 inside = m.group(2)
                 tag_pattern = rf'(<{final_tag}>)(.*?)(</{final_tag}>)'
                 if re.search(tag_pattern, inside, flags=re.DOTALL):
-                    # update existing value
                     new_inside = re.sub(tag_pattern, rf'\1{value}\3', inside, flags=re.DOTALL)
                 else:
-                    # append new tag at the end of parent
                     new_inside = inside + new_tag
                 return xml[:m.start(2)] + new_inside + xml[m.end(2):]
             else:
-                # Αν δεν υπάρχει το parent, βάλε το block ΣΤΗΝ ΑΡΧΗ του ObjectAlgemeen
                 object_algemeen_pattern = r'(<ObjectAlgemeen[^>]*>)(.*?)(</ObjectAlgemeen>)'
                 obj_match = re.search(object_algemeen_pattern, xml, flags=re.DOTALL)
                 if obj_match:
@@ -148,17 +148,14 @@ def smart_patch_xml(xml_text, mappings, values, root_tag='Objecten'):
                         xml[obj_match.end(2):]
                     )
                 else:
-                    # fallback: στην αρχή του root tag αν υπάρχει
                     root_tag = path_parts[0]
                     root_open = re.search(rf'(<{root_tag}[^>]*>)', xml, flags=re.IGNORECASE)
                     if root_open:
                         parent_block = f"<{parent_tag}>{new_tag}</{parent_tag}>"
                         return xml[:root_open.end()] + parent_block + xml[root_open.end():]
                     else:
-                        # αν δεν βρει τίποτα, απλά το βάζει στην αρχή
                         return f"<{parent_tag}>{new_tag}</{parent_tag}>" + xml
         else:
-            # δεν υπάρχει parent, πρόσθεσέ το στην αρχή του root (π.χ. /Tag1)
             root_tag = path_parts[0]
             root_open = re.search(rf'(<{root_tag}[^>]*>)', xml, flags=re.IGNORECASE)
             if root_open:
@@ -174,11 +171,14 @@ def smart_patch_xml(xml_text, mappings, values, root_tag='Objecten'):
         if isinstance(value, dict):
             xml_value_type = field.get("xml_value_type", "id")
             value = value.get(xml_value_type, value.get("id", ""))
+        # STRIP PATCH
+        if isinstance(value, str):
+            value = value.strip()
         if value != "":
             xml = patch_xml_tag(xml, xml_path, value)
     return xml
 
-# ---- ΤΕΛΟΣ ΝΕΑΣ FUNCTION ----
+# ---- END OF PATCHES ----
 
 st.title("XML Update")
 
@@ -223,7 +223,7 @@ if uploaded_files and len(uploaded_files) >= 2:
             v = ws[f"B{i}"].value
             if v is not None and str(v).strip() != "":
                 num = str(v).split()[0].replace(",", ".")
-                rz1_vals.append(num)
+                rz1_vals.append(num.strip())   # STRIP PATCH
         num_verdiepingen = len(rz1_vals)
         rz2_vals = get_rz_values(ws, "C", num_verdiepingen)
         rz3_vals = get_rz_values(ws, "D", num_verdiepingen)
@@ -302,20 +302,16 @@ if uploaded_files and len(uploaded_files) >= 2:
 
         fields = extract_custom_fields(task)
 
-        # --- ΠΕΡΝΑΜΕ ΚΑΙ ΤΗΝ ΗΜΕΡΟΜΗΝΙΑ ΔΗΜΙΟΥΡΓΙΑΣ (date_created) ---
         if "date_created" in task:
             try:
                 ts = int(task["date_created"]) / 1000
                 fields["date_created"] = datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
             except Exception:
                 fields["date_created"] = ""
-        # -----------------------------------------------------------
 
-        # Προβολή label στη φόρμα (προεπισκόπηση)
         for field in CLICKUP_FIELDS:
             if field.get("source") == "clickup":
                 val = fields.get(field["field"], "")
-                # Ειδική διαχείριση για date_created, για να εμφανίζει ωραία label
                 if field["field"] == "date_created":
                     label = val
                 else:
@@ -332,11 +328,22 @@ if uploaded_files and len(uploaded_files) >= 2:
         updated_fields = {}
         for field in CLICKUP_FIELDS:
             if field.get("source") == "clickup":
-                updated_fields[field["field"]] = fields.get(field["field"], "")
+                val = fields.get(field["field"], "")
+                if isinstance(val, dict):
+                    updated_fields[field["field"]] = val
+                elif isinstance(val, str):
+                    updated_fields[field["field"]] = val.strip()     # STRIP PATCH
+                else:
+                    updated_fields[field["field"]] = val
             elif field.get("source") == "excel":
                 updated_fields[field["field"]] = excel_values.get(field["field"], "")
             elif field.get("source") == "custom":
                 updated_fields[field["field"]] = field.get("fixed_value", "")
+
+        # -- STRIP PATCH: strip όλα τα string values στα updated_fields --
+        for k, v in updated_fields.items():
+            if isinstance(v, str):
+                updated_fields[k] = v.strip()
 
         try:
             new_xml = smart_patch_xml(xml_text, CLICKUP_FIELDS, updated_fields)
