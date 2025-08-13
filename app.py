@@ -20,18 +20,23 @@ LIST_IDS = [
     "901206264874",      # Energielabel Haaglanden
     "901511575020",      # Mijn EnergieLabel
     "901504459596",      # Energieinspectie
+    "901512403352",      # Prosperos
 ]
 
 LIST_MAPPINGS = {
     "901206264874": "mapping-Energielabel_Haaglanden.json",
     "901511575020": "mapping-Mijn_EnergieLabel.json",
     "901504459596": "mapping-EnergieInspectie.json",
+    "901512403352": "mapping-Prosperos.json"
+
 }
 
 LIST_NAMES = {
     "901206264874": "Energielabel Haaglanden",
     "901511575020": "Mijn EnergieLabel",
     "901504459596": "Εnergie Inspectie",
+    "901504459596": "Prosperos"
+
 }
 
 HEADERS = {"Authorization": API_TOKEN}
