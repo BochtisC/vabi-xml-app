@@ -33,7 +33,8 @@
         "source": "clickup",
         "field": "Bouwjaar",
         "ui_label": "bouwjaar",
-        "xml_path": "./Objecten/Object/Rekenzones/Rekenzone/RekenzoneAlgemeen/Bouwjaar"
+        "xml_path": "./Objecten/Object/Rekenzones/Rekenzone/RekenzoneAlgemeen/Bouwjaar",
+        "xml_value_type": "label"
     },
     {
         "source": "clickup",
