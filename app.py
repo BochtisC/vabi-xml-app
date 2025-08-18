@@ -507,7 +507,7 @@ if uploaded_files and len(uploaded_files) >= 2:
             st.download_button(
                 label="📥 Κατέβασε το νέο XML",
                 data=new_xml,
-                file_name=f"{selected}_updated.xml",
+                file_name=f"{selected}!.xml",
                 mime="application/xml"
             )
         except Exception as e:
