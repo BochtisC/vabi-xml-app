@@ -7,6 +7,7 @@ import pandas as pd
 import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+# ===================== Στυλ κουμπιού λήψης =====================
 st.markdown("""
     <style>
     .stDownloadButton button {
@@ -16,6 +17,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# ===================== Ρυθμίσεις ClickUp =====================
 API_TOKEN = "pk_82763580_PX00W04XWNJPJ2YR4M6NCNZ8WQPOLY6O"
 LIST_IDS = [
     "901206264874",      # Energielabel Haaglanden
@@ -40,7 +42,7 @@ LIST_NAMES = {
 
 HEADERS = {"Authorization": API_TOKEN}
 
-
+# ===================== ClickUp helpers =====================
 def get_tasks(list_id):
     """Φέρνει ΟΛΑ τα tasks από μια λίστα (με όλες τις σελίδες)."""
     url = f"https://api.clickup.com/api/v2/list/{list_id}/task"
@@ -62,6 +64,7 @@ def get_tasks(list_id):
 
 
 def extract_custom_fields(task):
+    """Μετατρέπει τα custom fields του ClickUp σε απλό dict, λύνει dropdown labels."""
     out, dropdown_options = {}, {}
     for f in task.get("custom_fields", []):
         if f.get("type") in ["drop_down", "dropdown"] and "type_config" in f and "options" in f["type_config"]:
@@ -83,7 +86,7 @@ def extract_custom_fields(task):
             out[name] = ""
     return out
 
-
+# ===================== Excel helpers =====================
 def clean_excel_value(value):
     if value is None:
         return ""
@@ -95,10 +98,14 @@ def clean_excel_value(value):
         return num.strip()
     return str(value).strip()
 
-
+# ===================== XML helpers =====================
 def update_verdiepingen_in_rekenzone(xml_text, rz_name, verdieping_values):
+    """
+    Αντικαθιστά το περιεχόμενο του <Verdiepingen> μόνο για την συγκεκριμένη rekenzone (με βάση το <Naam>).
+    Κρατάει την δομή και αφήνει άλλα πεδία ως έχουν.
+    """
     pattern = re.compile(
-        rf'(<Rekenzone>.*?<Naam>{rz_name}</Naam>.*?<Verdiepingen.*?>)(.*?)(</Verdiepingen>)(.*?</Rekenzone>)',
+        rf'(<Rekenzone>.*?<Naam>{re.escape(rz_name)}</Naam>.*?<Verdiepingen[^>]*>)(.*?)(</Verdiepingen>)(.*?</Rekenzone>)',
         re.DOTALL
     )
     def replacement(match):
@@ -124,16 +131,24 @@ def checkmark(val):
 
 
 def smart_patch_xml(xml_text, mappings, values, root_tag='Objecten'):
+    """
+    Εφαρμόζει τα mappings (excel/clickup/custom) στο XML με απλό regex-based patching.
+    Δεν σπάμε τη δομή – απλά εισάγουμε ή ενημερώνουμε απλά tags κάτω από τον parent που δείχνει το xml_path.
+    """
     xml = xml_text
-    def patch_xml_tag(xml, xml_path, value):
+
+    def patch_xml_tag(xml_str, xml_path, value):
         path_parts = xml_path.strip('./').split('/')
-        if not path_parts: return xml
-        parent_path = path_parts[:-1]; final_tag = path_parts[-1]
+        if not path_parts:
+            return xml_str
+        parent_path = path_parts[:-1]
+        final_tag = path_parts[-1]
         parent_tag = parent_path[-1] if parent_path else None
         new_tag = f"<{final_tag}>{value}</{final_tag}>"
+
         if parent_tag:
             parent_pattern = rf'(<{parent_tag}[^>]*>)(.*?)(</{parent_tag}>)'
-            m = re.search(parent_pattern, xml, flags=re.DOTALL)
+            m = re.search(parent_pattern, xml_str, flags=re.DOTALL)
             if m:
                 inside = m.group(2)
                 tag_pattern = rf'(<{final_tag}>)(.*?)(</{final_tag}>)'
@@ -141,32 +156,36 @@ def smart_patch_xml(xml_text, mappings, values, root_tag='Objecten'):
                     new_inside = re.sub(tag_pattern, rf'\1{value}\3', inside, flags=re.DOTALL)
                 else:
                     new_inside = inside + new_tag
-                return xml[:m.start(2)] + new_inside + xml[m.end(2):]
+                return xml_str[:m.start(2)] + new_inside + xml_str[m.end(2):]
             else:
+                # αν δεν βρίσκουμε τον parent, προσπαθούμε κάτω από ObjectAlgemeen
                 object_algemeen_pattern = r'(<ObjectAlgemeen[^>]*>)(.*?)(</ObjectAlgemeen>)'
-                obj_match = re.search(object_algemeen_pattern, xml, flags=re.DOTALL)
+                obj_match = re.search(object_algemeen_pattern, xml_str, flags=re.DOTALL)
                 if obj_match:
                     parent_block = f"<{parent_tag}>{new_tag}</{parent_tag}>"
                     new_content = parent_block + obj_match.group(2)
-                    return xml[:obj_match.start(2)] + new_content + xml[obj_match.end(2):]
+                    return xml_str[:obj_match.start(2)] + new_content + xml_str[obj_match.end(2):]
                 else:
-                    root_tag = path_parts[0]
-                    root_open = re.search(rf'(<{root_tag}[^>]*>)', xml, flags=re.IGNORECASE)
+                    # αλλιώς, προσθέτουμε κάτω από το πρώτο άνοιγμα του root_tag
+                    root_t = path_parts[0]
+                    root_open = re.search(rf'(<{root_t}[^>]*>)', xml_str, flags=re.IGNORECASE)
                     if root_open:
                         parent_block = f"<{parent_tag}>{new_tag}</{parent_tag}>"
-                        return xml[:root_open.end()] + parent_block + xml[root_open.end():]
+                        return xml_str[:root_open.end()] + parent_block + xml_str[root_open.end():]
                     else:
-                        return f"<{parent_tag}>{new_tag}</{parent_tag}>" + xml
+                        return f"<{parent_tag}>{new_tag}</{parent_tag}>" + xml_str
         else:
-            root_tag = path_parts[0]
-            root_open = re.search(rf'(<{root_tag}[^>]*>)', xml, flags=re.IGNORECASE)
+            root_t = path_parts[0]
+            root_open = re.search(rf'(<{root_t}[^>]*>)', xml_str, flags=re.IGNORECASE)
             if root_open:
-                return xml[:root_open.end()] + new_tag + xml[root_open.end():]
+                return xml_str[:root_open.end()] + new_tag + xml_str[root_open.end():]
             else:
-                return new_tag + xml
+                return new_tag + xml_str
+
     for field in mappings:
         xml_path = field.get("xml_path")
-        if not xml_path or "/" not in xml_path: continue
+        if not xml_path or "/" not in xml_path:
+            continue
         value = values.get(field["field"], "")
         if isinstance(value, dict):
             xml_value_type = field.get("xml_value_type", "id")
@@ -178,52 +197,15 @@ def smart_patch_xml(xml_text, mappings, values, root_tag='Objecten'):
     return xml
 
 
-def safe_patch_algemeen_fields(xml_text, rz_name, extra_fields):
-    """
-    Συμπληρώνει στο <RekenzoneAlgemeen> της συγκεκριμένης rz τα tags του extra_fields
-    ΚΑΙ εξασφαλίζει ότι υπάρχει <Gebruiksoppervlakte>1</Gebruiksoppervlakte>.
-    - Αν tag ΔΕΝ υπάρχει → το προσθέτει.
-    - Αν ΥΠΑΡΧΕΙ αλλά είναι κενό → το γεμίζει.
-    - Αν ΥΠΑΡΧΕΙ και έχει τιμή → δεν το πειράζει.
-    """
-    pattern = re.compile(
-        rf'(<Rekenzone>.*?<Naam>{rz_name}</Naam>.*?<RekenzoneAlgemeen>)(.*?)(</RekenzoneAlgemeen>)',
-        re.DOTALL
-    )
-    def repl(m):
-        head, content, tail = m.group(1), m.group(2), m.group(3)
-
-        # 1) Base fields (εκτός του GO που το χειριζόμαστε ξεχωριστά)
-        for tag, val in extra_fields.items():
-            if tag == "Gebruiksoppervlakte":
-                continue
-            tag_pattern = re.compile(rf'<{tag}[^>]*>(.*?)</{tag}>', re.DOTALL)
-            found = tag_pattern.search(content)
-            if found:
-                if found.group(1).strip() == "":
-                    content = tag_pattern.sub(f"<{tag}>{val}</{tag}>", content, count=1)
-            else:
-                content += f"<{tag}>{val}</{tag}>"
-
-        # 2) Ειδικός χειρισμός για <Gebruiksoppervlakte>
-        go_re = re.compile(r'<Gebruiksoppervlakte[^>]*>(.*?)</Gebruiksoppervlakte>', re.DOTALL)
-        found_go = go_re.search(content)
-        if found_go:
-            if found_go.group(1).strip() == "":
-                content = go_re.sub("<Gebruiksoppervlakte>1</Gebruiksoppervlakte>", content, count=1)
-        else:
-            content += "<Gebruiksoppervlakte>1</Gebruiksoppervlakte>"
-
-        return head + content + tail
-
-    return pattern.sub(repl, xml_text)
-
-
 def extract_nonempty_fields_from_rekenzone(xml_text, rz_name, tag_list):
+    """
+    Επιστρέφει dict με όσα tags βρεθούν ΜΕ μη-κενό περιεχόμενο
+    μέσα στο <RekenzoneAlgemeen> της συγκεκριμένης rekenzone.
+    """
     result = {}
     for tag in tag_list:
         pattern = re.compile(
-            rf'<Rekenzone>.*?<Naam>{rz_name}</Naam>.*?<RekenzoneAlgemeen>.*?<({tag})>(.*?)</\1>.*?</RekenzoneAlgemeen>',
+            rf'<Rekenzone>.*?<Naam>{re.escape(rz_name)}</Naam>.*?<RekenzoneAlgemeen>.*?<({tag})>(.*?)</\1>.*?</RekenzoneAlgemeen>',
             re.DOTALL
         )
         m = pattern.search(xml_text)
@@ -232,8 +214,83 @@ def extract_nonempty_fields_from_rekenzone(xml_text, rz_name, tag_list):
     return result
 
 
-# ===================== Streamlit UI =====================
+def collect_base_fields_fallback(xml_text):
+    """
+    Παίρνει για κάθε tag την πρώτη διαθέσιμη (μη-κενή) τιμή από rz1 -> rz2 -> rz3.
+    Αν δεν βρεθεί Gebruiksoppervlakte, default = '1'.
+    """
+    tags = ["Bouwjaar", "TypeBouwwijzeVloeren", "TypeBouwwijzeWanden", "Leidingdoorvoeren", "Gebruiksoppervlakte"]
+    out = {}
+    for tag in tags:
+        val = ""
+        for rz in ["rz1", "rz2", "rz3"]:
+            got = extract_nonempty_fields_from_rekenzone(xml_text, rz, [tag]).get(tag, "")
+            if got and str(got).strip():
+                val = str(got).strip()
+                break
+        if tag == "Gebruiksoppervlakte" and (not val):
+            val = "1"
+        if val:
+            out[tag] = val
+    return out
 
+
+def safe_patch_algemeen_fields(xml_text, rz_name, extra_fields):
+    """
+    Συμπληρώνει στο <RekenzoneAlgemeen> της συγκεκριμένης rz τα tags του extra_fields
+    και βάζει το <Gebruiksoppervlakte> πριν από το <Leidingdoorvoeren>.
+    - Αν tag ΔΕΝ υπάρχει → το προσθέτει.
+    - Αν ΥΠΑΡΧΕΙ αλλά είναι κενό → το γεμίζει.
+    - Αν ΥΠΑΡΧΕΙ και έχει τιμή → δεν το πειράζει.
+    """
+    pattern = re.compile(
+        rf'(<Rekenzone>.*?<Naam>{re.escape(rz_name)}</Naam>.*?<RekenzoneAlgemeen>)(.*?)(</RekenzoneAlgemeen>)',
+        re.DOTALL
+    )
+
+    def repl(m):
+        head, content, tail = m.group(1), m.group(2), m.group(3)
+
+        def upsert(tag, val):
+            nonlocal content
+            tag_re = re.compile(rf'<{tag}[^>]*>(.*?)</{tag}>', re.DOTALL)
+            found = tag_re.search(content)
+            if found:
+                if found.group(1).strip() == "":
+                    content = tag_re.sub(f"<{tag}>{val}</{tag}>", content, count=1)
+            else:
+                content += f"<{tag}>{val}</{tag}>"
+
+        # 1) Όλα εκτός του GO
+        for tag, val in extra_fields.items():
+            if tag == "Gebruiksoppervlakte":
+                continue
+            upsert(tag, val)
+
+        # 2) Ειδικός χειρισμός για GO: θέση ΠΡΙΝ το Leidingdoorvoeren
+        go_val = extra_fields.get("Gebruiksoppervlakte", "1")
+        go_tag = f"<Gebruiksoppervlakte>{go_val}</Gebruiksoppervlakte>"
+        go_re = re.compile(r'<Gebruiksoppervlakte[^>]*>(.*?)</Gebruiksoppervlakte>', re.DOTALL)
+        ldp_re = re.compile(r'(<Leidingdoorvoeren[^>]*>.*?</Leidingdoorvoeren>)', re.DOTALL)
+
+        found_go = go_re.search(content)
+        if found_go:
+            # Αν υπάρχει αλλά είναι κενό → γέμισέ το
+            if found_go.group(1).strip() == "":
+                content = go_re.sub(go_tag, content, count=1)
+        else:
+            # Δεν υπάρχει: βάλε το ΠΡΙΝ το Leidingdoorvoeren, αλλιώς στο τέλος
+            ldp_match = ldp_re.search(content)
+            if ldp_match:
+                content = content[:ldp_match.start()] + go_tag + content[ldp_match.start():]
+            else:
+                content += go_tag
+
+        return head + content + tail
+
+    return pattern.sub(repl, xml_text)
+
+# ===================== UI =====================
 st.title("XML Update")
 
 uploaded_files = st.file_uploader(
@@ -243,6 +300,7 @@ uploaded_files = st.file_uploader(
 )
 
 if uploaded_files and len(uploaded_files) >= 2:
+    # Ομαδοποίηση αρχείων κατά επέκταση & βάση ονόματος
     files_by_type = {}
     for f in uploaded_files:
         ext = f.name.rsplit('.', 1)[-1].lower()
@@ -258,15 +316,19 @@ if uploaded_files and len(uploaded_files) >= 2:
     if not common_names:
         st.error("Δε βρέθηκε XML & Excel με ίδιο όνομα!")
     else:
+        # Επιλέγουμε το πρώτο κοινό (ή μπορείς να βάλεις selectbox)
         selected = list(common_names)[0]
         xml_file = xml_files[selected]
         excel_file = excel_files[selected]
+
+        # Διαβάζουμε XML
         try:
             xml_text = xml_file.read().decode("utf-8")
         except Exception as e:
             st.error(f"Σφάλμα στο διάβασμα του XML: {e}")
             st.stop()
 
+        # Διαβάζουμε Excel
         excel_file.seek(0)
         wb = openpyxl.load_workbook(excel_file, data_only=True)
         if "Algemeen" not in wb.sheetnames:
@@ -283,24 +345,32 @@ if uploaded_files and len(uploaded_files) >= 2:
             v3 = ws[f"D{i}"].value
             if not any([name, v1, v2, v3]):
                 break
+
             def parse(v):
                 if v is None or str(v).strip() == "":
                     return "0"
                 return str(v).split()[0].replace(",", ".").strip()
+
             verd_names.append(str(name).strip() if name else f"Row {i}")
             rz1_vals.append(parse(v1))
             rz2_vals.append(parse(v2))
             rz3_vals.append(parse(v3))
         # ---------------------------------------------------------------------------
 
-        # Πίνακας παρουσίασης (παραλείπει σειρές με όλα 0)
+        # Πίνακας παρουσίασης (παραλείπει σειρές με όλα 0) — ΑΣΦΑΛΕΙΑ στο μήκος
         data = []
+
         def safe_float(x):
-            try: return float(str(x).replace(",", "."))
-            except: return 0.0
-        for i in range(len(verd_names)):
+            try:
+                return float(str(x).replace(",", "."))
+            except:
+                return 0.0
+
+        n = min(len(verd_names), len(rz1_vals), len(rz2_vals), len(rz3_vals))
+        for i in range(n):
             v1, v2, v3 = safe_float(rz1_vals[i]), safe_float(rz2_vals[i]), safe_float(rz3_vals[i])
-            if v1 == 0 and v2 == 0 and v3 == 0: continue
+            if v1 == 0 and v2 == 0 and v3 == 0:
+                continue
             data.append({
                 "Verdieping": verd_names[i],
                 "rz1 (B)": checkmark(rz1_vals[i]),
@@ -317,10 +387,10 @@ if uploaded_files and len(uploaded_files) >= 2:
         st.markdown("#### Τιμές Verdiepingen ανά rz (από Excel):")
         st.table(df)
 
+        # ===================== ClickUp αναζήτηση task =====================
         clickup_status = st.empty()
         clickup_status.info(f"Ψάχνω στο ClickUp για task με όνομα: {selected}")
 
-        # --- Παράλληλη αναζήτηση ---
         task, found_list_id = None, None
         with ThreadPoolExecutor(max_workers=len(LIST_IDS)) as executor:
             future_to_list = {executor.submit(get_tasks, lid): lid for lid in LIST_IDS}
@@ -331,10 +401,13 @@ if uploaded_files and len(uploaded_files) >= 2:
                     clickup_status.info(f"Έλεγχος στη λίστα: {LIST_NAMES.get(list_id, list_id)}")
                     for t in tasks:
                         if t.get("name", "").strip() == selected.strip():
-                            task = t; found_list_id = list_id; break
+                            task = t
+                            found_list_id = list_id
+                            break
                 except Exception as e:
                     st.warning(f"Σφάλμα στη λίστα {list_id}: {e}")
-                if task: break
+                if task:
+                    break
 
         if not task:
             st.error(f"❌ Δε βρέθηκε task στο ClickUp με όνομα '{selected}'.")
@@ -347,7 +420,7 @@ if uploaded_files and len(uploaded_files) >= 2:
         with open(mapping_file, "r", encoding="utf-8") as f:
             CLICKUP_FIELDS = json.load(f)
 
-        # Διαβάζουμε τιμές Excel βάσει mapping
+        # ===================== Διαβάζουμε τιμές Excel βάσει mapping =====================
         excel_values = {}
         for field in CLICKUP_FIELDS:
             if field.get("source") == "excel":
@@ -357,7 +430,7 @@ if uploaded_files and len(uploaded_files) >= 2:
                     value = "1"
                 excel_values[field["field"]] = clean_excel_value(value)
 
-        # Ενημερωτικό block
+        # Ενημερωτικό block για τιμές Excel
         excel_block = ""
         for field in CLICKUP_FIELDS:
             if field.get("source") == "excel":
@@ -368,6 +441,7 @@ if uploaded_files and len(uploaded_files) >= 2:
 
         st.success(f"Βρέθηκε task στο ClickUp: {selected} στη λίστα: {LIST_NAMES.get(found_list_id, found_list_id)}")
 
+        # ===================== Τιμές από ClickUp task =====================
         fields = extract_custom_fields(task)
 
         if "date_created" in task:
@@ -390,7 +464,7 @@ if uploaded_files and len(uploaded_files) >= 2:
                 val = field.get("fixed_value", "")
                 st.markdown(f"🔒 <b>{field['ui_label']}</b>: <span style='color:#222'>{val}</span>", unsafe_allow_html=True)
 
-        # Συγκεντρωτικά updated_fields
+        # Συγκεντρωτικά updated_fields για mapping
         updated_fields = {}
         for field in CLICKUP_FIELDS:
             if field.get("source") == "clickup":
@@ -410,6 +484,7 @@ if uploaded_files and len(uploaded_files) >= 2:
             if isinstance(v, str):
                 updated_fields[k] = v.strip()
 
+        # ===================== Επεξεργασία XML =====================
         try:
             # 1) Εφαρμογή mappings (ClickUp/Excel/Custom)
             new_xml = smart_patch_xml(xml_text, CLICKUP_FIELDS, updated_fields)
@@ -422,16 +497,11 @@ if uploaded_files and len(uploaded_files) >= 2:
             if re.search(r'<Rekenzone>.*?<Naam>rz3</Naam>', new_xml, re.DOTALL):
                 new_xml = update_verdiepingen_in_rekenzone(new_xml, "rz3", rz3_vals)
 
-            # 3) Κληρονόμηση base fields από rz1 + ΠΑΝΤΑ Gebruiksoppervlakte=1 για rz1/2/3
-            base_fields = extract_nonempty_fields_from_rekenzone(
-                new_xml, "rz1",
-                ["Bouwjaar", "TypeBouwwijzeVloeren", "TypeBouwwijzeWanden", "Leidingdoorvoeren"]
-            )
+            # 3) Fallback κληρονομιά base fields: για κάθε tag παίρνουμε πρώτη μη-κενή από rz1→rz2→rz3
+            base_fields = collect_base_fields_fallback(new_xml)
             for rz_name in ["rz1", "rz2", "rz3"]:
                 if re.search(rf'<Rekenzone>.*?<Naam>{rz_name}</Naam>', new_xml, re.DOTALL):
-                    ef = dict(base_fields)
-                    ef["Gebruiksoppervlakte"] = "1"
-                    new_xml = safe_patch_algemeen_fields(new_xml, rz_name, ef)
+                    new_xml = safe_patch_algemeen_fields(new_xml, rz_name, base_fields)
 
             # 4) Έξοδος
             st.download_button(
